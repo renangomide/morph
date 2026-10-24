@@ -23,8 +23,9 @@ if ($RequireSigned -and -not (Test-Path -LiteralPath $PfxPath)) {
 
 if (-not $NoBuild) { Invoke-MorphBuild -Profile 'release' }
 
-$layout = New-Layout -Profile 'release'
 $root = Get-RepoRoot
+# Not layout\: that folder is the dev-registered package (dev-register.ps1).
+$layout = New-Layout -Profile 'release' -Path (Join-Path $root 'target\release-layout')
 $out = Join-Path $root ("target\Morph-{0}-x64.msix" -f (Get-MorphVersion))
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $out) | Out-Null
 

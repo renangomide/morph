@@ -522,7 +522,7 @@ Check the current version of every crate before adding it (use the latest stable
 
 ## 9. Packaging, signing, distribution
 
-- `make-msix.ps1`: `cargo build --release` → stage `layout/` (binaries + vendor + Assets + manifest with version) → `makeappx pack` → `signtool sign`.
+- `make-msix.ps1`: `cargo build --release` → stage `target/release-layout/` (not the dev-registered `layout/`; binaries + vendor + Assets + manifest with version) → `makeappx pack` → `signtool sign`.
 - **Version** comes from the workspace `Cargo.toml` (`x.y.z.0` in the manifest).
 - **Signing roadmap:**
   1. Dev: loose registration (no signing) or self-signed cert via `dev-cert.ps1`.

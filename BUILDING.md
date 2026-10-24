@@ -54,7 +54,7 @@ FFmpeg comes from the [morph-ffmpeg](https://github.com/renangomide/morph-ffmpeg
 .\packaging\make-msix.ps1    # release build -> target\Morph-<version>-x64.msix, signed with that cert
 ```
 
-`make-msix.ps1 -PfxPath <file> -PfxPassword <pwd>` signs with another certificate; its subject must be `CN=OpenMorph`. The version comes from `Cargo.toml` (`[workspace.package]`).
+`make-msix.ps1 -PfxPath <file> -PfxPassword <pwd>` signs with another certificate; its subject must be `CN=OpenMorph`. It stages the package in `target\release-layout\`, never in `layout\` (the folder `dev-register.ps1` registers), so building a release does not disturb an installed development package. The version comes from `Cargo.toml` (`[workspace.package]`).
 
 ## Building the release zip
 

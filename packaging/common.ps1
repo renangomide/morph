@@ -55,12 +55,14 @@ function Find-SdkTool([string]$Name) {
     return ($candidates | Sort-Object Version -Descending | Select-Object -First 1).Path
 }
 
-# Builds <repo>\layout from target\<Profile>: binaries, icon, Assets and the rendered manifest.
-function New-Layout([ValidateSet('debug', 'release')][string]$Profile = 'debug') {
+# Builds a package folder from target\<Profile>: binaries, icon, Assets and the rendered manifest.
+# Default <repo>\layout is the folder dev-register.ps1 registers; release builds pass their own -Path
+# (make-msix.ps1: target\release-layout) so they never rewrite or lock the registered dev package.
+function New-Layout([ValidateSet('debug', 'release')][string]$Profile = 'debug', [string]$Path) {
     $root = Get-RepoRoot
     $target = Join-Path $root "target\$Profile"
     $pkg = Join-Path $root 'packaging'
-    $layout = Join-Path $root 'layout'
+    $layout = if ($Path) { $Path } else { Join-Path $root 'layout' }
 
     # Third-party binaries (pdfium.dll, ffmpeg.exe, ffprobe.exe). Idempotent: skips what is already in vendor\.
     & (Join-Path $root 'scripts\fetch-deps.ps1')
