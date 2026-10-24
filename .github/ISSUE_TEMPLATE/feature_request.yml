@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest a new conversion, option or improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+      description: The task you are trying to get done, e.g. "turn a folder of screenshots into one PDF".
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How should Morph help?
+      description: The menu item, option or behaviour you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you use today?
+      description: Other tools or workarounds, if any.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself (please discuss the approach here first, see CONTRIBUTING.md).

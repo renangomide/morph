@@ -1,0 +1,607 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Reusable Fluent widgets: cards, segmented bar, format chips,
+// category cards, expander, icon button, pills, toggle row, banner. Shared by
+// every view: changing a widget's API affects all of them.
+// No user-visible strings here: labels come in through properties.
+
+import { CheckBox, Switch } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icons, Icon } from "icons.slint";
+
+// Primary elevated card (summary header, options, result list).
+export component Card inherits Rectangle {
+    in property <length> inner-padding: Theme.space-l;
+    in property <length> inner-spacing: Theme.space-m;
+    background: Theme.surface-card;
+    border-radius: Theme.radius-card;
+    border-width: 1px;
+    border-color: Theme.border-card;
+    VerticalLayout {
+        padding: root.inner-padding;
+        spacing: root.inner-spacing;
+        @children
+    }
+}
+
+// Secondary recessed container (file drawer, footer, expanded settings).
+export component SubtleCard inherits Card {
+    background: Theme.surface-card-subtle;
+}
+
+// Full-width pill segmented control. Controlled: shows `current`, reports
+// clicks / ←→ through `selected(index)`; the caller sets `current`.
+export component SegmentedBar {
+    in property <[string]> items;
+    in property <int> current;
+    in property <bool> enabled: true;
+    callback selected(int);
+
+    min-height: 36px;
+    accessible-role: tab-list;
+    forward-focus: fs;
+
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == Key.LeftArrow && root.current > 0) {
+                root.selected(root.current - 1);
+                return accept;
+            }
+            if (event.text == Key.RightArrow && root.current < root.items.length - 1) {
+                root.selected(root.current + 1);
+                return accept;
+            }
+            reject
+        }
+
+        Rectangle {
+            background: Theme.surface-pill-track;
+            border-radius: Theme.radius-track;
+            HorizontalLayout {
+                padding: 3px;
+                spacing: 3px;
+                for item[i] in root.items: seg := Rectangle {
+                    property <bool> on: i == root.current;
+                    horizontal-stretch: 1;
+                    min-height: 30px;
+                    border-radius: Theme.radius-track - 2px;
+                    background: self.on ? Theme.accent : ta.has-hover ? Theme.surface-hover : transparent;
+                    animate background { duration: Theme.motion-fast; }
+                    accessible-role: tab;
+                    accessible-label: item;
+                    accessible-item-selected: self.on;
+                    accessible-action-default => {
+                        root.selected(i);
+                    }
+                    ta := TouchArea {
+                        enabled: root.enabled;
+                        clicked => {
+                            fs.focus();
+                            root.selected(i);
+                        }
+                    }
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        Text {
+                            text: item;
+                            font-size: Theme.font-body;
+                            font-weight: seg.on ? Theme.weight-semibold : Theme.weight-regular;
+                            color: seg.on ? Theme.accent-foreground : Theme.text-secondary;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+            }
+        }
+
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-track;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// One tactile chip (format, preset, page size…). `checked` = selected.
+export component FormatChip {
+    in property <string> text;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    min-height: 32px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: fs;
+
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            // Space selects; Enter stays the window's Convert.
+            if (event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+        ta := TouchArea {
+            enabled: root.enabled;
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
+        Rectangle {
+            border-radius: Theme.radius-chip;
+            border-width: 1px;
+            border-color: root.checked ? Theme.accent : ta.has-hover ? Theme.border-chip-hover : Theme.border-chip;
+            background: root.checked ? Theme.accent-tint : Theme.surface-input;
+            animate border-color, background { duration: Theme.motion-fast; }
+        }
+        HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 10px;
+            Text {
+                text: root.text;
+                font-size: Theme.font-caption + 1px;
+                font-weight: root.checked ? Theme.weight-semibold : Theme.weight-regular;
+                color: !root.enabled ? Theme.text-disabled : root.checked ? Theme.accent-text : Theme.text-primary;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-chip;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// Single-select chips in a grid of `columns` equal columns. Controlled like
+// SegmentedBar: shows `current`, reports clicks through `selected(index)`.
+export component FormatChipGrid {
+    in property <[string]> items;
+    in property <int> current: -1;
+    in property <int> columns: 5;
+    in property <bool> enabled: true;
+    in property <length> chip-height: 34px;
+    in property <length> gap: 6px;
+    callback selected(int);
+
+    property <int> rows: ceil(root.items.length / max(1, root.columns));
+    property <length> chip-width: (root.width - (root.columns - 1) * root.gap) / max(1, root.columns);
+    height: root.rows * root.chip-height + max(0, root.rows - 1) * root.gap;
+    accessible-role: list;
+
+    for item[i] in root.items: FormatChip {
+        x: Math.mod(i, root.columns) * (root.chip-width + root.gap);
+        y: floor(i / root.columns) * (root.chip-height + root.gap);
+        width: root.chip-width;
+        height: root.chip-height;
+        text: item;
+        checked: i == root.current;
+        enabled: root.enabled;
+        clicked => {
+            root.selected(i);
+        }
+    }
+}
+
+// Rounded category square with its icon (summary header, cards).
+export component CategoryBadge inherits Rectangle {
+    in property <int> category;
+    in property <length> size: 36px;
+    width: root.size;
+    height: root.size;
+    border-radius: Theme.radius-badge;
+    border-width: 1px;
+    border-color: Theme.category-border(root.category);
+    background: Theme.category-fill(root.category);
+    Icon {
+        source: Icons.category(root.category);
+        colorize: Theme.category-text(root.category);
+        width: root.size * 0.5;
+        height: root.size * 0.5;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+}
+
+// Mixed selection: one card per category ("Images (10)" · "→ WebP") with an
+// include checkbox. `label` already holds the count.
+export component CategoryTabCard {
+    in property <int> category;
+    in property <string> label;
+    in property <string> summary;
+    in property <bool> selected;
+    in property <bool> included: true;
+    // Accessible name of the checkbox ("Include Images").
+    in property <string> include-label;
+    callback clicked();
+    callback include-toggled(bool);
+
+    min-height: 56px;
+    min-width: 150px;
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-description: root.summary;
+    accessible-item-selected: root.selected;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: fs;
+
+    fs := FocusScope {
+        // Space shows this type; Enter stays "Convert" (window shortcut).
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+        ta := TouchArea {
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
+        Rectangle {
+            border-radius: Theme.radius-card;
+            border-width: 1px;
+            border-color: root.selected ? Theme.accent : ta.has-hover ? Theme.border-chip-hover : Theme.border-card;
+            background: root.selected ? Theme.accent-tint : Theme.surface-card;
+            animate border-color, background { duration: Theme.motion-fast; }
+        }
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 8px;
+            VerticalLayout {
+                alignment: center;
+                CategoryBadge {
+                    category: root.category;
+                    size: 28px;
+                    opacity: root.included ? 1 : 0.5;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                spacing: 1px;
+                Text {
+                    text: root.label;
+                    font-size: Theme.font-caption + 1px;
+                    font-weight: Theme.weight-semibold;
+                    color: root.included ? Theme.text-primary : Theme.text-muted;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.summary;
+                    font-size: Theme.font-caption;
+                    color: Theme.text-muted;
+                    overflow: elide;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                CheckBox {
+                    checked: root.included;
+                    accessible-label: root.include-label;
+                    toggled => {
+                        root.include-toggled(self.checked);
+                    }
+                }
+            }
+        }
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-card;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// Collapsible settings card: header (title, subtitle shown even when
+// collapsed, chevron), children below when `expanded`.
+export component ExpanderCard inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in-out property <bool> expanded;
+    // Height of the open body: down to `end`, minus its spacing, plus padding.
+    property <length> body-height: end.y - 12px + 16px;
+
+    background: Theme.surface-card;
+    border-radius: Theme.radius-card;
+    border-width: 1px;
+    border-color: Theme.border-card;
+    clip: true;
+
+    VerticalLayout {
+        header := Rectangle {
+            min-height: 60px;
+            accessible-role: button;
+            accessible-label: root.title;
+            accessible-description: root.subtitle;
+            accessible-expanded: root.expanded;
+            accessible-action-default => {
+                root.expanded = !root.expanded;
+            }
+            forward-focus: hfs;
+            hfs := FocusScope {
+                key-pressed(event) => {
+                    if (event.text == " " || event.text == Key.Return) {
+                        root.expanded = !root.expanded;
+                        return accept;
+                    }
+                    reject
+                }
+                hta := TouchArea {
+                    clicked => {
+                        hfs.focus();
+                        root.expanded = !root.expanded;
+                    }
+                }
+                Rectangle {
+                    background: hta.has-hover ? Theme.surface-hover : transparent;
+                }
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 12px;
+                    padding-top: 10px;
+                    padding-bottom: 10px;
+                    spacing: 12px;
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        spacing: 2px;
+                        Text {
+                            text: root.title;
+                            font-size: Theme.font-body;
+                            color: Theme.text-primary;
+                            wrap: word-wrap;
+                        }
+                        if root.subtitle != "": Text {
+                            text: root.subtitle;
+                            font-size: Theme.font-caption;
+                            color: Theme.text-muted;
+                            wrap: word-wrap;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Icon {
+                            source: root.expanded ? Icons.chevron-up : Icons.chevron-down;
+                            colorize: Theme.text-secondary;
+                        }
+                    }
+                }
+                if hfs.has-focus: Rectangle {
+                    border-width: 2px;
+                    border-radius: Theme.radius-card;
+                    border-color: Theme.text-primary;
+                }
+            }
+        }
+        if root.expanded: Rectangle {
+            height: 1px;
+            background: Theme.border-subtle;
+        }
+        body := Rectangle {
+            clip: true;
+            height: root.expanded ? root.body-height : 0px;
+            animate height { duration: Theme.motion-normal; easing: ease-in-out; }
+            // Slint 1.18 computes a layout's `preferred-height` at an
+            // unconstrained width (wrapped text counts as one line), so the
+            // body would cut off its last lines. Instead the children are laid
+            // out at the top of a tall layout (real widths, real heights) and
+            // `end` marks where they stop.
+            VerticalLayout {
+                y: 0;
+                height: 8000px;
+                padding: 16px;
+                spacing: 12px;
+                alignment: start;
+                @children
+                end := Rectangle {
+                    height: 0px;
+                }
+            }
+        }
+    }
+}
+
+// Square icon-only button (gear, show in folder, ↑ ↓ ✕). `label` is its
+// accessible name (Slint 1.18 has no tooltip widget).
+export component IconButton {
+    in property <image> icon;
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <length> icon-size: 16px;
+    in property <brush> tint: Theme.text-primary;
+    callback clicked();
+
+    width: 32px;
+    height: 32px;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: fs;
+
+    fs := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+        ta := TouchArea {
+            enabled: root.enabled;
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
+        Rectangle {
+            border-radius: Theme.radius-control;
+            background: ta.pressed ? Theme.surface-pressed : ta.has-hover ? Theme.surface-hover : transparent;
+        }
+        Icon {
+            source: root.icon;
+            width: root.icon-size;
+            height: root.icon-size;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            colorize: root.enabled ? root.tint : Theme.text-disabled;
+        }
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-control;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// Small rounded label: size pill, "−33%" savings, "→ WEBP" target (`mono`),
+// "12 / 12" counter. Colours default to neutral; pass Theme.success-* etc.
+export component Pill inherits Rectangle {
+    in property <string> text;
+    in property <color> fill: Theme.surface-card-subtle;
+    in property <color> stroke: Theme.border-card;
+    in property <color> text-color: Theme.text-secondary;
+    in property <bool> mono;
+    in property <bool> strong;
+    in property <image> icon;
+    in property <bool> has-icon;
+
+    background: root.fill;
+    border-width: 1px;
+    border-color: root.stroke;
+    border-radius: self.height / 2;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+        spacing: 4px;
+        if root.has-icon: VerticalLayout {
+            alignment: center;
+            Icon {
+                source: root.icon;
+                width: 12px;
+                height: 12px;
+                colorize: root.text-color;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: Theme.font-caption;
+            font-family: root.mono ? Theme.font-mono : "";
+            font-weight: root.strong ? Theme.weight-semibold : Theme.weight-regular;
+            color: root.text-color;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// Settings row: text (+ optional description) on the left, switch on the right.
+export component ToggleRow {
+    in property <string> text;
+    in property <string> description;
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled();
+
+    min-height: 44px;
+    HorizontalLayout {
+        spacing: 12px;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.text;
+                font-size: Theme.font-body;
+                color: root.enabled ? Theme.text-primary : Theme.text-disabled;
+                wrap: word-wrap;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                font-size: Theme.font-caption;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            Switch {
+                checked <=> root.checked;
+                enabled: root.enabled;
+                accessible-label: root.text;
+                toggled => {
+                    root.toggled();
+                }
+            }
+        }
+    }
+}
+
+// Warning banner (missing Office engine, missing FFmpeg). Buttons go in as
+// children, laid out in a row under the text.
+export component WarningBanner inherits Rectangle {
+    in property <string> title;
+    in property <string> text;
+
+    background: Theme.warning-fill;
+    border-width: 1px;
+    border-color: Theme.warning-border;
+    border-radius: Theme.radius-control + 2px;
+    HorizontalLayout {
+        padding: 12px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: start;
+            Icon {
+                source: Icons.warning;
+                width: 18px;
+                height: 18px;
+                colorize: Theme.warning-text;
+            }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 6px;
+            Text {
+                text: root.title;
+                font-weight: Theme.weight-semibold;
+                color: Theme.warning-text;
+                wrap: word-wrap;
+            }
+            if root.text != "": Text {
+                text: root.text;
+                color: Theme.text-primary;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                @children
+            }
+        }
+    }
+}

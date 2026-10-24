@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Link the Visual C++ runtime statically into every binary (Morph.exe, morph-cli.exe,
+# morph_shell.dll): no VCRUNTIME140.dll / api-ms-win-crt-* dependency, no VC++ redist needed.
+# The vcpkg crate (libheif-sys) then links the matching x64-windows-static triplet (/MT), and
+# cc-built C code (mozjpeg, libwebp, libdeflate) follows the same flag. Never mix /MD and /MT.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

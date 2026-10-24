@@ -1,0 +1,68 @@
+name: Bug report
+description: Something doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Security problems: please don't use this form, see SECURITY.md (Security tab → Report a vulnerability).
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Settings ▸ System ▸ About ▸ Windows specifications (e.g. Windows 11 Home 24H2, build 26100.2314).
+    validations:
+      required: true
+  - type: input
+    id: morph-version
+    attributes:
+      label: Morph version
+      description: Start menu ▸ Morph ▸ Settings ▸ About.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do?
+      description: The files you selected (types, sizes), the menu item or action, and the options you chose.
+      placeholder: |
+        1. Selected 3 HEIC photos in File Explorer
+        2. Right-click ▸ Morph ▸ Convert to JPG…
+        3. Clicked Convert
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Include the error message and, if there is one, the text from the error's Details (Copy button).
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log file
+      description: |
+        Settings ▸ About ▸ Open log folder, then drag today's `morph-YYYY-MM-DD.log` here. Look through it first: it contains file names and folder paths.
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample file
+      description: If you can share a file that shows the problem, drag it here (zip it if GitHub refuses the type). Only share files you are OK making public.
+  - type: dropdown
+    id: office
+    attributes:
+      label: Office engine (for document conversions only)
+      options:
+        - Not a document conversion
+        - Microsoft Office
+        - LibreOffice
+        - Neither installed
+        - Don't know

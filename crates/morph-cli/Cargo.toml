@@ -1,0 +1,20 @@
+[package]
+name = "morph-cli"
+description = "Command-line front end for Morph conversions: runs the same request/options model as the GUI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+morph-core = { workspace = true }
+morph-formats = { workspace = true }
+serde_json = { workspace = true }
+clap = { version = "4.6.7", features = ["derive"] }
+ctrlc = "3.5.2"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

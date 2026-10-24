@@ -1,0 +1,62 @@
+{
+  "generatedBy": "morph-cli convert --action image.convert --format webp --quality 80 (target\\release\\morph-cli.exe)",
+  "rows": [
+    {
+      "name": "IMG_2041.jpg",
+      "output": "IMG_2041.webp",
+      "bytesIn": 4414600,
+      "bytesOut": 2284506,
+      "sizeIn": "4.2 MB",
+      "sizes": "4.2 MB → 2.2 MB",
+      "change": "−48%"
+    },
+    {
+      "name": "IMG_2042.jpg",
+      "output": "IMG_2042.webp",
+      "bytesIn": 4403913,
+      "bytesOut": 2361480,
+      "sizeIn": "4.2 MB",
+      "sizes": "4.2 MB → 2.3 MB",
+      "change": "−46%"
+    },
+    {
+      "name": "IMG_2043.jpg",
+      "output": "IMG_2043.webp",
+      "bytesIn": 4496595,
+      "bytesOut": 2362266,
+      "sizeIn": "4.3 MB",
+      "sizes": "4.3 MB → 2.3 MB",
+      "change": "−47%"
+    },
+    {
+      "name": "IMG_2044.jpg",
+      "output": "IMG_2044.webp",
+      "bytesIn": 4357235,
+      "bytesOut": 2331314,
+      "sizeIn": "4.2 MB",
+      "sizes": "4.2 MB → 2.2 MB",
+      "change": "−46%"
+    },
+    {
+      "name": "IMG_2045.jpg",
+      "output": "IMG_2045.webp",
+      "bytesIn": 4321785,
+      "bytesOut": 2280596,
+      "sizeIn": "4.1 MB",
+      "sizes": "4.1 MB → 2.2 MB",
+      "change": "−47%"
+    },
+    {
+      "name": "IMG_2046.jpg",
+      "output": "IMG_2046.webp",
+      "bytesIn": 4416487,
+      "bytesOut": 2374548,
+      "sizeIn": "4.2 MB",
+      "sizes": "4.2 MB → 2.3 MB",
+      "change": "−46%"
+    }
+  ],
+  "totalIn": "25.2 MB",
+  "saved": "11.8 MB",
+  "summary": "6 converted · saved 11.8 MB"
+}

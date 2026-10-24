@@ -1,0 +1,18 @@
+[package]
+name = "morph-formats"
+description = "Tiny shared tables for Morph: extensions, categories, menu items, IDs, paths. Used by the shell DLL, so keep it lightweight."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_Packaging_Appx",
+] }
+
+[lints]
+workspace = true

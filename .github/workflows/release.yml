@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Tag v* -> build, test, sign, GitHub Release with the install zip (.msix + .cer + Install.cmd), plus the .msix and .cer (SPEC §9, §11).
+#
+# Signing: set the repository secrets MSIX_PFX_BASE64 (base64 of the .pfx) and MSIX_PFX_PASSWORD.
+# The certificate subject must be "CN=OpenMorph" (the manifest publisher; the shell DLL derives the
+# package family name from it). Without the secrets the package is test-signed with a fresh
+# self-signed cert and the release is marked as a pre-release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup
+
+      - name: Check tag matches Cargo.toml version
+        run: |
+          . .\packaging\common.ps1
+          $v = Get-MorphVersion
+          if ("${{ github.ref_name }}" -ne "v$v") { throw "Tag ${{ github.ref_name }} does not match workspace version v$v." }
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Prepare signing certificate
+        id: cert
+        env:
+          PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: |
+          $dir = Join-Path $env:GITHUB_WORKSPACE 'packaging\cert'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          if ($env:PFX_BASE64) {
+            $pfx = Join-Path $dir 'release.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+            $c = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfx, $env:PFX_PASSWORD)
+            [IO.File]::WriteAllBytes((Join-Path $dir 'Morph.cer'), $c.Export('Cert'))
+            Add-Content $env:GITHUB_OUTPUT "pfx=$pfx"
+            Add-Content $env:GITHUB_OUTPUT 'trusted=true'
+          }
+          else {
+            .\packaging\dev-cert.ps1
+            Copy-Item (Join-Path $dir 'morph-dev.cer') (Join-Path $dir 'Morph.cer')
+            Add-Content $env:GITHUB_OUTPUT "pfx=$(Join-Path $dir 'morph-dev.pfx')"
+            Add-Content $env:GITHUB_OUTPUT 'trusted=false'
+          }
+
+      - name: Package and sign MSIX, build the install zip
+        env:
+          PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: |
+          $pwd_ = 'morph-dev'
+          $ts = @{}
+          if ('${{ steps.cert.outputs.trusted }}' -eq 'true') {
+            $pwd_ = $env:PFX_PASSWORD
+            $ts = @{ TimestampUrl = 'http://timestamp.digicert.com' }
+          }
+          .\packaging\make-release.ps1 -PfxPath '${{ steps.cert.outputs.pfx }}' -PfxPassword $pwd_ @ts
+
+      # The decoded release .pfx must not outlive the signing step (even if it failed).
+      - name: Remove signing certificate
+        if: always()
+        run: |
+          $pfx = Join-Path $env:GITHUB_WORKSPACE 'packaging\cert\release.pfx'
+          if (Test-Path -LiteralPath $pfx) { Remove-Item -LiteralPath $pfx -Force }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @'
+          ## Install
+
+          1. Download `Morph-<version>-x64.zip` below and extract it (right-click > Extract All).
+          2. Double-click `Install.cmd` and click **Yes** when Windows asks for administrator permission
+             (it trusts `Morph.cer`, publisher "OpenMorph", in Trusted People, then installs the `.msix`).
+          3. Right-click any image, PDF, video, audio or Office file: **Morph**.
+
+          Uninstall: `Uninstall.cmd`, or Settings > Apps > Installed apps > Morph > Uninstall.
+          '@
+          $notesFile = Join-Path $env:RUNNER_TEMP 'notes.md'
+          [IO.File]::WriteAllText($notesFile, $notes, (New-Object System.Text.UTF8Encoding($false)))
+          $ghArgs = @('release', 'create', '${{ github.ref_name }}', '--title', 'Morph ${{ github.ref_name }}',
+                      '--notes-file', $notesFile, '--generate-notes')
+          if ('${{ steps.cert.outputs.trusted }}' -ne 'true') { $ghArgs += '--prerelease' }
+          $msix = @(Get-ChildItem target\Morph-*-x64.msix | ForEach-Object FullName)
+          $zip = @(Get-ChildItem target\release-zip\Morph-*-x64.zip | ForEach-Object FullName)
+          gh @ghArgs @zip @msix packaging\cert\Morph.cer
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed (exit code $LASTEXITCODE)" }

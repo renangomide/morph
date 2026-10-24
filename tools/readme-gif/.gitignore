@@ -1,0 +1,6 @@
+node_modules/
+work/
+src/thumbs/
+src/results.js
+src/morph.svg
+out/

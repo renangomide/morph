@@ -1,0 +1,6 @@
+Plain text sample
+
+Accented words: café, relatório, ação. CJK: 報告.
+Second line of the first paragraph.
+
+A line with <angle brackets> & ampersands * stars # hashes.

@@ -1,0 +1,585 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- README demo of Morph: Explorer selection -> right-click -> Morph > Convert to WebP… -> conversion window -> progress.
+     Every frame is a pure function of t (window.__seek). Morph's UI is rebuilt from crates/morph-app/ui/*.slint (dark theme,
+     Windows default accent); the Explorer and context menu are a hand-built Windows 11 dark replica. Sizes come from
+     results.json, written by scripts/convert.mjs after a real morph-cli conversion of the photos shown. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Morph demo</title>
+<style>
+:root {
+  /* Morph tokens: crates/morph-app/ui/theme.slint (dark) */
+  --surface-window: #202020; --surface-card: #2b2b2b; --surface-card-subtle: #262626; --surface-pill-track: #191919;
+  --surface-input: #323232; --border-card: #3a3a3a; --border-subtle: #353535; --border-input: #454545; --border-chip: #424242;
+  --text-primary: #f3f3f3; --text-secondary: #c6c6c6; --text-muted: #a6a6a6;
+  --success-fill: #1e3a24; --success-border: #2d5936; --success-text: #6ccb5f;
+  --info-fill: #19324c; --info-border: #274e78; --info-text: #60cdff;
+  --cat0-fill: #172a45; --cat0-border: #264b78; --cat0-text: #60cdff;
+  /* Windows 11 default accent in dark mode (Slint Fluent palette accent-background / -foreground) */
+  --accent: #60cdff; --accent-fg: #000000; --accent-tint: rgba(96, 205, 255, 0.22);
+  /* Windows 11 dark Explorer / menu */
+  --ex-strip: #1c1c1c; --ex-band: #2b2b2b; --ex-body: #191919; --ex-line: rgba(255,255,255,0.07);
+  --ex-text: #ffffff; --ex-text2: rgba(255,255,255,0.79); --ex-text3: rgba(255,255,255,0.55); --ex-dis: rgba(255,255,255,0.36);
+  --sel: #464646; --sel-border: #5c5c5c; --hover: #2e2e2e;
+  --menu-bg: #2c2c2c; --menu-border: rgba(255,255,255,0.09); --menu-hover: rgba(255,255,255,0.075);
+  --ui: "Segoe UI", sans-serif;
+  /* Morph (Slint 1.18, no font set): Windows resolves its default family to Arial, as in the captures of the real app */
+  --morph: Arial, sans-serif;
+  --xaml: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 960px; height: 600px; overflow: hidden; background: #111; }
+#main { position: absolute; left: 0; top: 0; width: 960px; height: 600px; overflow: hidden; background: #0e0e0e; font-family: var(--ui); -webkit-font-smoothing: antialiased; }
+#cam { position: absolute; left: 0; top: 0; width: 960px; height: 800px; transform-origin: 0 0; }
+.g { font-family: var(--icons); font-style: normal; font-weight: normal; line-height: 1; display: inline-block; }
+
+/* ───────────── Explorer (Windows 11 dark) ───────────── */
+#explorer { position: absolute; left: 0; top: 0; width: 960px; height: 800px; background: var(--ex-body); color: var(--ex-text); font-family: var(--xaml); font-size: 12px; overflow: hidden; }
+#tabs { position: absolute; left: 0; top: 0; width: 100%; height: 40px; background: var(--ex-strip); }
+#tab { position: absolute; left: 8px; top: 7px; width: 236px; height: 33px; background: var(--ex-band); border-radius: 8px 8px 0 0; }
+#tab .ic { position: absolute; left: 12px; top: 8px; width: 16px; height: 16px; }
+#tab .t { position: absolute; left: 36px; top: 8px; font-size: 12px; }
+#tab .x { position: absolute; right: 12px; top: 11px; font-size: 10px; color: var(--ex-text2); }
+#newtab { position: absolute; left: 256px; top: 14px; font-size: 12px; color: var(--ex-text2); }
+.caption { position: absolute; right: 0; top: 0; display: flex; }
+.caption span { width: 46px; height: 32px; display: flex; align-items: center; justify-content: center; font-family: var(--icons); font-size: 10px; color: #fff; }
+#addr { position: absolute; left: 0; top: 40px; width: 100%; height: 48px; background: var(--ex-band); }
+#addr .nav { position: absolute; top: 15px; font-size: 16px; color: var(--ex-text); }
+#addrbox { position: absolute; left: 172px; top: 8px; right: 232px; height: 32px; border-radius: 4px; background: #1f1f1f; border: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; padding-left: 10px; gap: 8px; font-size: 14px; }
+#addrbox .chev { font-family: var(--icons); font-size: 9px; color: var(--ex-text2); }
+#search { position: absolute; right: 16px; top: 8px; width: 204px; height: 32px; border-radius: 4px; background: #1f1f1f; border: 1px solid rgba(255,255,255,0.06); font-size: 14px; color: var(--ex-text3); padding: 6px 12px; }
+#search .g { position: absolute; right: 12px; top: 9px; font-size: 13px; color: var(--ex-text2); }
+#cmd { position: absolute; left: 0; top: 88px; width: 100%; height: 48px; background: var(--ex-band); border-bottom: 1px solid var(--ex-line); display: flex; align-items: center; padding-left: 12px; font-size: 14px; }
+#cmd .b { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--ex-text); }
+#cmd .b .g { font-size: 16px; }
+#cmd .ib { width: 40px; height: 32px; display: flex; align-items: center; justify-content: center; }
+#cmd .ib .g { font-size: 16px; }
+#cmd .dis { color: var(--ex-dis); }
+#cmd .sep { width: 1px; height: 24px; background: rgba(255,255,255,0.1); margin: 0 6px; }
+#cmd .dd { font-size: 9px !important; color: var(--ex-text2); }
+#cmd .right { position: absolute; right: 16px; }
+#navpane { position: absolute; left: 0; top: 137px; width: 208px; bottom: 24px; padding: 6px 4px; border-right: 1px solid var(--ex-line); }
+.nv { height: 32px; display: flex; align-items: center; gap: 12px; padding-left: 30px; font-size: 14px; color: var(--ex-text); position: relative; }
+.nv .ic { width: 16px; height: 16px; flex: none; }
+.nv .pin { position: absolute; right: 12px; font-family: var(--icons); font-size: 12px; color: var(--ex-text3); }
+.nv.top { padding-left: 30px; }
+.nvsep { height: 1px; background: var(--ex-line); margin: 8px 12px; }
+#content { position: absolute; left: 209px; top: 137px; right: 0; bottom: 24px; background: var(--ex-body); }
+.item { position: absolute; width: 104px; height: 126px; }
+.item .bg { position: absolute; inset: 0; border: 1px solid transparent; }
+.item.sel .bg { background: var(--sel); }
+.item.hov .bg { background: var(--hover); }
+.item .th { position: absolute; left: 4px; top: 4px; width: 96px; height: 96px; display: flex; align-items: flex-end; justify-content: center; }
+.item .th img { width: 96px; height: 72px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.08); }
+.item .nm { position: absolute; left: 2px; right: 2px; top: 104px; text-align: center; font-family: var(--ui); font-size: 12px; line-height: 16px; color: var(--ex-text); }
+#marquee { position: absolute; background: rgba(0, 120, 215, 0.32); border: 1px solid #0078d7; }
+#status { position: absolute; left: 0; bottom: 0; width: 100%; height: 24px; background: var(--ex-body); font-family: var(--ui); font-size: 12px; color: var(--ex-text); display: flex; align-items: center; padding-left: 12px; white-space: pre; }
+#status .bar { width: 1px; height: 14px; background: rgba(255,255,255,0.25); margin: 0 10px; }
+#status .vw { position: absolute; right: 10px; top: 4px; display: flex; gap: 6px; font-family: var(--icons); font-size: 14px; color: var(--ex-text2); }
+#status .vw span { width: 22px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 3px; }
+#status .vw .on { background: rgba(255,255,255,0.1); }
+
+/* ───────────── Windows 11 context menu (dark) ───────────── */
+.menu { position: absolute; background: var(--menu-bg); border: 1px solid var(--menu-border); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.36), 0 0 2px rgba(0,0,0,0.3); padding: 4px; font-family: var(--xaml); font-size: 14px; color: #fff; }
+.menu .row { height: 32px; display: flex; align-items: center; border-radius: 4px; position: relative; padding-left: 12px; padding-right: 12px; white-space: nowrap; }
+.menu .row.icon { padding-left: 44px; }
+.menu .row .mi { position: absolute; left: 12px; top: 8px; width: 16px; height: 16px; font-family: var(--icons); font-size: 16px; line-height: 16px; text-align: center; }
+.menu .row .sc { margin-left: auto; padding-left: 28px; font-size: 12px; color: rgba(255,255,255,0.6); }
+.menu .row .sub { margin-left: auto; font-family: var(--icons); font-size: 10px; color: rgba(255,255,255,0.8); padding-left: 24px; }
+.menu .row.h { background: var(--menu-hover); }
+.menu .sep { height: 1px; background: rgba(255,255,255,0.08); margin: 4px -4px; }
+.menu .icons { display: flex; gap: 4px; padding: 2px 4px 2px 4px; height: 44px; align-items: center; }
+.menu .icons span { width: 40px; height: 36px; display: flex; align-items: center; justify-content: center; font-family: var(--icons); font-size: 16px; border-radius: 4px; }
+#ctx { width: 296px; }
+#sub { width: 232px; }
+
+/* ───────────── Morph window (Slint, dark) ───────────── */
+#win { position: absolute; width: 602px; height: 671px; border-radius: 8px; border: 1px solid #3b3b3b; background: var(--surface-window); box-shadow: 0 32px 64px rgba(0,0,0,0.55), 0 2px 21px rgba(0,0,0,0.4); overflow: hidden; font-family: var(--morph); color: var(--text-primary); transform-origin: 50% 50%; }
+#titlebar { position: absolute; left: 0; top: 0; width: 600px; height: 30px; background: #202020; }
+#titlebar img { position: absolute; left: 9px; top: 7px; width: 16px; height: 16px; }
+#titlebar .t { position: absolute; left: 28px; top: 7px; font-family: "Segoe UI Variable Text", "Segoe UI"; font-size: 12px; color: #fff; }
+#titlebar .caption span { height: 30px; font-size: 10px; }
+#client { position: absolute; left: 0; top: 30px; width: 600px; height: 640px; }
+.page { position: absolute; inset: 0; padding: 16px; display: flex; flex-direction: column; }
+.card { background: var(--surface-card); border: 1px solid var(--border-card); border-radius: 10px; }
+.subtle { background: var(--surface-card-subtle); }
+.pill { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 10px; font-weight: 400; border: 1px solid var(--border-card); background: var(--surface-card-subtle); font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.pill.mono { font-family: Consolas, monospace; color: var(--text-muted); }
+.pill.strong { font-weight: 600; color: var(--text-primary); }
+.pill.ok { background: var(--success-fill); border-color: var(--success-border); color: var(--success-text); font-weight: 600; }
+.svgi { display: block; }
+.btn { height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 4px; background: #2d2d2d; border: 1px solid rgba(255,255,255,0.07); border-top-color: rgba(255,255,255,0.09); font-size: 12px; color: #fff; white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: rgba(255,255,255,0.08); color: var(--accent-fg); }
+.btn.hover { background: #323232; }
+.btn.primary.hover { background: #5abce9; }
+.chk { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-primary); height: 18px; }
+.chk .box { width: 20px; height: 20px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.55); background: rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; }
+.chk.on .box { background: var(--accent); border-color: var(--accent); }
+/* convert view */
+#hdr { height: 60px; padding: 0 11px; display: flex; align-items: center; gap: 12px; }
+.badge { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--cat0-border); background: var(--cat0-fill); display: flex; align-items: center; justify-content: center; flex: none; }
+#hdr .mid { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+#hdr .count { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
+#hdr .count .pill { color: var(--text-muted); }
+.sub12 { font-size: 12px; color: var(--text-muted); }
+.drawer { height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 12px; border-radius: 6px; border: 1px solid var(--border-input); background: var(--surface-input); font-size: 13px; }
+.iconbtn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+#seg { margin-top: 12px; height: 36px; flex: none; border-radius: 8px; background: var(--surface-pill-track); padding: 3px; display: flex; gap: 3px; }
+#seg div { flex: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-secondary); }
+#seg .on { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+#opts { margin-top: 12px; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
+.lbl { line-height: 14px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.chips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.chip { height: 34px; border-radius: 6px; border: 1px solid var(--border-chip); background: var(--surface-input); font-size: 13px; display: flex; align-items: center; justify-content: center; color: var(--text-primary); }
+.chip.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+.div { height: 1px; background: var(--border-subtle); }
+.qrow { height: 20px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
+.slider { position: relative; height: 18px; }
+.slider .tr { position: absolute; left: 10px; right: 10px; top: 7px; height: 4px; border-radius: 2px; background: #3b3b3b; }
+.slider .fill { position: absolute; left: 10px; top: 7px; height: 4px; border-radius: 2px; background: var(--accent); }
+.slider .th { position: absolute; top: -1px; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: #454545; border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; justify-content: center; }
+.slider .th i { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); display: block; }
+#foot { margin-top: auto; padding: 11px; display: flex; flex-direction: column; gap: 10px; }
+#foot .r1 { display: flex; align-items: center; gap: 12px; }
+#foot .r1 .lbl2 { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+#foot .r1 .chips { grid-template-columns: repeat(2, 1fr); width: 380px; }
+#foot .r1 .chip { height: 30px; }
+#foot .r2 { height: 32px; display: flex; align-items: center; gap: 8px; }
+#foot .r2 .sp { flex: 1; }
+/* progress view */
+#pg { gap: 14px; }
+#phead { padding: 13px; display: flex; flex-direction: column; gap: 10px; }
+#phead .r { display: flex; align-items: center; gap: 10px; }
+.sbadge { width: 32px; height: 32px; border-radius: 8px; border: 1px solid; display: flex; align-items: center; justify-content: center; flex: none; }
+#phead .mid { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+#phead .ttl { font-size: 16px; font-weight: 600; }
+.pbar { position: relative; height: 6px; }
+.pbar .trk { position: absolute; left: 0; right: 0; top: 2.5px; height: 1px; background: #3b3b3b; }
+.pbar .val { position: absolute; left: 0; top: 0; height: 6px; border-radius: 3px; background: var(--accent); }
+#plist { flex: 1; min-height: 0; overflow: hidden; }
+.prow { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.prow + .prow::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--border-subtle); }
+.dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid; display: flex; align-items: center; justify-content: center; flex: none; }
+.prow .mid { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.prow .l1 { display: flex; align-items: center; gap: 8px; }
+.prow .name { font-size: 14px; font-weight: 600; }
+.prow .l2 { display: flex; align-items: center; gap: 8px; min-height: 14px; font-size: 12px; color: var(--text-muted); }
+.prow .rb { width: 112px; height: 4px; position: relative; }
+.prow .rb .trk { position: absolute; left: 0; right: 0; top: 1.5px; height: 1px; background: #3b3b3b; }
+.prow .rb .val { position: absolute; left: 0; top: 0; height: 4px; border-radius: 2px; background: var(--accent); }
+.prow .acts { display: flex; gap: 6px; }
+.sbtn { height: 28px; min-width: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-input); background: var(--surface-input); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.sbtn.ico { padding: 0 6px; }
+#pfoot { display: flex; gap: 8px; align-items: center; }
+#pfoot .sp { flex: 1; }
+
+/* cursor */
+#cursor { position: absolute; left: 0; top: 0; width: 1px; height: 1px; transform-origin: 0 0; z-index: 50; }
+#cursor svg { position: absolute; left: -1px; top: -1px; overflow: visible; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.45)); }
+</style>
+</head>
+<body>
+<div id="main">
+ <div id="cam">
+
+  <!-- ===== Explorer ===== -->
+  <div id="explorer" data-ui="captured">
+   <div id="tabs">
+    <div id="tab"><svg class="ic" viewBox="0 0 16 16"><path d="M1.5 3.5a1 1 0 0 1 1-1h3.6l1.4 1.4h6a1 1 0 0 1 1 1v7.6a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="#f2b630"/><path d="M1.5 5.6h13v6.9a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" fill="#ffd25c"/></svg><span class="t">Trip</span><span class="x g">&#xE8BB;</span></div>
+    <span id="newtab" class="g">&#xE710;</span>
+    <div class="caption"><span>&#xE921;</span><span>&#xE922;</span><span>&#xE8BB;</span></div>
+   </div>
+   <div id="addr">
+    <span class="nav g" style="left:16px">&#xE72B;</span>
+    <span class="nav g" style="left:56px;color:var(--ex-dis)">&#xE72A;</span>
+    <span class="nav g" style="left:96px">&#xE74A;</span>
+    <span class="nav g" style="left:136px">&#xE72C;</span>
+    <div id="addrbox"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="#3d8ee8"/><path d="M2.5 12.5l3.6-4.2 2.6 2.8 1.7-1.8 3.1 3.2z" fill="#bfe3ff"/><circle cx="11" cy="6" r="1.3" fill="#fff3b0"/></svg><span class="chev">&#xE76C;</span><span>Pictures</span><span class="chev">&#xE76C;</span><span>Trip</span><span class="chev" style="margin-left:auto;margin-right:10px">&#xE70D;</span></div>
+    <div id="search">Search Trip<span class="g">&#xE721;</span></div>
+   </div>
+   <div id="cmd">
+    <div class="b"><span class="g" style="color:#fff">&#xE710;</span>New<span class="g dd">&#xE70D;</span></div>
+    <div class="sep"></div>
+    <div class="ib cmdsel"><span class="g">&#xE8C6;</span></div>
+    <div class="ib cmdsel"><span class="g">&#xE8C8;</span></div>
+    <div class="ib dis"><span class="g">&#xE77F;</span></div>
+    <div class="ib cmdsel"><span class="g">&#xE8AC;</span></div>
+    <div class="ib cmdsel"><span class="g">&#xE72D;</span></div>
+    <div class="ib cmdsel"><span class="g">&#xE74D;</span></div>
+    <div class="sep"></div>
+    <div class="b"><span class="g">&#xE8CB;</span>Sort<span class="g dd">&#xE70D;</span></div>
+    <div class="b"><span class="g">&#xE8A9;</span>View<span class="g dd">&#xE70D;</span></div>
+    <div class="b"><span class="g">&#xE712;</span></div>
+    <div class="b right"><span class="g">&#xE8A0;</span>Details</div>
+   </div>
+   <div id="navpane">
+    <div class="nv"><span class="ic g" style="font-size:16px">&#xE80F;</span>Home</div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="2" fill="#2f86e0"/><path d="M2.5 12l3.5-4 2.5 2.5 2-2 3 3.5z" fill="#a8d8ff"/></svg>Gallery</div>
+    <div class="nvsep"></div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><rect x="1" y="2.5" width="14" height="9.5" rx="1.2" fill="#3a9cf0"/><rect x="5" y="13" width="6" height="1.3" rx=".6" fill="#9fb4c8"/></svg>Desktop<span class="pin">&#xE718;</span></div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><path d="M8 1.5v9M4.2 7l3.8 3.8L11.8 7" stroke="#38b26c" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="12.6" width="11" height="1.6" rx=".8" fill="#38b26c"/></svg>Downloads<span class="pin">&#xE718;</span></div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><path d="M3.5 1.5h6l3 3v10h-9z" fill="#e8eef6"/><path d="M9.5 1.5v3h3" fill="#b9c6d6"/><path d="M5.5 8h5M5.5 10h5M5.5 12h3" stroke="#3a7bd5" stroke-width="1"/></svg>Documents<span class="pin">&#xE718;</span></div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="#3d8ee8"/><path d="M2.5 12.5l3.6-4.2 2.6 2.8 1.7-1.8 3.1 3.2z" fill="#bfe3ff"/><circle cx="11" cy="6" r="1.3" fill="#fff3b0"/></svg>Pictures<span class="pin">&#xE718;</span></div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><path d="M6 12V3.5l7-1.6V10" stroke="#f08a3c" stroke-width="1.6" fill="none"/><circle cx="4.4" cy="12" r="2" fill="#f08a3c"/><circle cx="11.4" cy="10.4" r="2" fill="#f08a3c"/></svg>Music<span class="pin">&#xE718;</span></div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1.5" fill="#8f5fe0"/><path d="M6.5 6v4l3.5-2z" fill="#fff"/></svg>Videos<span class="pin">&#xE718;</span></div>
+    <div class="nvsep"></div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><rect x="1" y="2.5" width="14" height="9" rx="1.2" fill="#5aa9f0"/><rect x="2" y="3.5" width="12" height="7" fill="#1d5fa8"/><rect x="5" y="13" width="6" height="1.3" rx=".6" fill="#9fb4c8"/></svg>This PC</div>
+    <div class="nv"><svg class="ic" viewBox="0 0 16 16"><rect x="1.5" y="2" width="13" height="8" rx="1" fill="#5aa9f0"/><path d="M8 10v2.5M3 13.5h10" stroke="#9fb4c8" stroke-width="1.4"/></svg>Network</div>
+   </div>
+   <div id="content"><div id="items"></div><div id="marquee"></div></div>
+   <div id="status"><span id="st1">6 items</span><span class="bar"></span><span id="st2"></span><div class="vw"><span>&#xE8FD;</span><span class="on">&#xE8A9;</span></div></div>
+  </div>
+
+  <!-- ===== Context menu (selection: 6 JPEG photos) ===== -->
+  <div id="ctx" class="menu" data-ui="captured">
+   <div class="icons"><span>&#xE8C6;</span><span>&#xE8C8;</span><span>&#xE72D;</span><span>&#xE74D;</span></div>
+   <div class="sep"></div>
+   <div class="row icon"><span class="mi"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2.5" fill="#2f86e0"/><path d="M2.2 12.6l3.8-4.4 2.6 2.8 1.8-1.9 3.4 3.5z" fill="#a8d8ff"/><circle cx="11" cy="5.6" r="1.4" fill="#fff"/></svg></span>Open<span class="sc">Enter</span></div>
+   <div class="row icon"><span class="mi">&#xE7F4;</span>Set as desktop background</div>
+   <div class="row icon"><span class="mi">&#xE7AD;</span>Rotate right</div>
+   <div class="row icon"><span class="mi" style="transform:scaleX(-1)">&#xE7AD;</span>Rotate left</div>
+   <div class="sep"></div>
+   <div class="row icon" id="r-morph"><span class="mi"><img src="morph.svg" width="16" height="16" alt=""></span>Morph<span class="sub">&#xE76C;</span></div>
+   <div class="sep"></div>
+   <div class="row icon"><span class="mi">&#xF012;</span>Compress to ZIP file</div>
+   <div class="row icon"><span class="mi">&#xE62F;</span>Copy as path<span class="sc">Ctrl+Shift+C</span></div>
+   <div class="row icon"><span class="mi">&#xE90F;</span>Properties<span class="sc">Alt+Enter</span></div>
+   <div class="sep"></div>
+   <div class="row icon"><span class="mi">&#xE8A7;</span>Show more options<span class="sc">Shift+F10</span></div>
+  </div>
+
+  <!-- ===== Morph ▸ submenu: image_menu() in crates/morph-formats/src/menu.rs ===== -->
+  <div id="sub" class="menu" data-ui="captured">
+   <div class="row" id="s0">Convert to JPG…</div>
+   <div class="row" id="s1">Convert to PNG…</div>
+   <div class="row" id="s2">Convert to WebP…</div>
+   <div class="row" id="s3">Convert to AVIF…</div>
+   <div class="row" id="s4">Convert to PDF…</div>
+   <div class="sep"></div>
+   <div class="row">Compress…</div>
+   <div class="row">Resize…</div>
+   <div class="row">Remove metadata…</div>
+   <div class="sep"></div>
+   <div class="row">More options…</div>
+  </div>
+
+  <!-- ===== Morph window ===== -->
+  <div id="win" data-ui="captured">
+   <div id="titlebar"><img src="morph.svg" alt=""><span class="t">Morph</span><div class="caption"><span>&#xE921;</span><span>&#xE922;</span><span>&#xE8BB;</span></div></div>
+   <div id="client">
+    <!-- page 0: convert_view.slint, Images / Convert -->
+    <div class="page" id="pconv">
+     <div class="card" id="hdr">
+      <div class="badge"><svg class="svgi" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60cdff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>
+      <div class="mid"><div class="count"><span>6 files</span><span class="pill" id="hsize"></span></div><div class="sub12">Images batch ready</div></div>
+      <div class="drawer">Show files<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c6c6c6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      <div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c6c6c6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+     </div>
+     <div id="seg"><div class="on">Convert</div><div>Compress</div><div>Resize</div><div>Clean</div></div>
+     <div class="card" id="opts">
+      <div class="lbl">Format</div>
+      <div class="chips"><div class="chip">JPG</div><div class="chip">PNG</div><div class="chip on">WebP</div><div class="chip">AVIF</div><div class="chip">BMP</div><div class="chip">TIFF</div><div class="chip">GIF</div><div class="chip">ICO</div><div class="chip">PDF</div></div>
+      <div class="div"></div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+       <div class="qrow"><span>Quality</span><span class="pill strong">80</span></div>
+       <div class="slider"><div class="tr"></div><div class="fill" style="width:calc((100% - 20px) * 0.798)"></div><div class="th" style="left:calc(10px + (100% - 20px) * 0.798)"><i></i></div></div>
+      </div>
+      <div class="chk"><span class="box"></span>Lossless</div>
+      <div class="div"></div>
+      <div class="chk on"><span class="box"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6.3l2.6 2.6L10 3.4" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Keep metadata (date, camera, location)</div>
+      <div class="chk"><span class="box"></span>Remove location (GPS) only</div>
+     </div>
+     <div class="card subtle" id="foot">
+      <div class="r1"><span class="lbl2">Save to</span><div class="chips"><div class="chip on">Next to the original files</div><div class="chip">Choose folder…</div></div></div>
+      <div class="div"></div>
+      <div class="r2"><div class="chk on"><span class="box"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6.3l2.6 2.6L10 3.4" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Remember these settings</div><div class="sp"></div><div class="btn">Cancel</div><div class="btn primary" id="bconv">Convert 6</div></div>
+     </div>
+    </div>
+    <!-- page 1: progress_view.slint -->
+    <div class="page" id="pg">
+     <div class="card" id="phead">
+      <div class="r"><div class="sbadge" id="pbadge"></div><div class="mid"><div class="ttl" id="ptitle"></div><div class="sub12">Saved next to the original files</div></div><span class="pill strong" id="pcount"></span></div>
+      <div class="r" id="poverall"><div class="pbar" style="flex:1"><div class="trk"></div><div class="val" id="pval"></div></div><span style="width:40px;text-align:right;font-size:12px;color:var(--text-secondary)" id="ppct"></span></div>
+     </div>
+     <div class="card" id="plist"></div>
+     <div id="pfoot"></div>
+    </div>
+   </div>
+  </div>
+
+  <div id="cursor"><svg width="20" height="26" viewBox="-1 -1 20 26"><path d="M0.5 0.5 L0.5 17.2 L4.6 13.4 L7.4 19.8 L10.2 18.6 L7.5 12.4 L13.2 12.4 Z" fill="#fff" stroke="#000" stroke-width="1" stroke-linejoin="round"/></svg></div>
+ </div>
+</div>
+
+<script src="results.js"></script>
+<script>
+'use strict';
+/* ---------- clock ---------- */
+const FPS = 20, DUR = 13.7;
+
+/* eases: copied from the motionmaxxing runtime (motion.js, Apache-2.0), measured on professional films */
+const powerOut = p => t => 1 - Math.pow(1 - t, p);
+const powerIn = p => t => Math.pow(t, p);
+const expoOut = k => { const d = 1 - Math.exp(-k); return t => (1 - Math.exp(-k * t)) / d; };
+const smoothP = p => t => { const a = Math.pow(t, p), b = Math.pow(1 - t, p); return a / (a + b); };
+const guard = f => t => (t <= 0 ? 0 : t >= 1 ? 1 : f(t));
+const EASE = { softLand: guard(expoOut(3.41)), whip: guard(powerOut(2.52)), glide: guard(powerOut(1.7)), cruise: guard(t => t),
+  softInOut: guard(smoothP(1.42)), gentleIn: guard(powerIn(2.07)), accelExit: guard(powerIn(2.6)), inOut: guard(smoothP(2.2)) };
+const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
+const P = (t, a, b, e = 'cruise') => EASE[e](clamp01((t - a) / (b - a)));
+const lerp = (a, b, k) => a + (b - a) * k;
+// keys: [[t, value, easeOfSegmentEndingHere], ...]; value may be a number or an array
+function key(t, ks) {
+  if (t <= ks[0][0]) return ks[0][1];
+  for (let i = 1; i < ks.length; i++) {
+    if (t <= ks[i][0]) {
+      const [t0, v0] = ks[i - 1], [t1, v1, e] = ks[i], k = P(t, t0, t1, e || 'inOut');
+      return Array.isArray(v0) ? v0.map((v, j) => lerp(v, v1[j], k)) : lerp(v0, v1, k);
+    }
+  }
+  return ks[ks.length - 1][1];
+}
+const $ = s => document.querySelector(s);
+const R = window.RESULTS;
+
+/* ---------- Explorer file area ---------- */
+const files = [];
+R.rows.forEach((r, i) => { files.push({ name: r.name, thumb: 'thumbs/' + r.name.replace('.jpg', '.jpg'), jpg: i, isNew: false }); files.push({ name: r.output, thumb: 'thumbs/' + r.name, jpg: -1, isNew: true }); });
+const COLS = 6, CELL_W = 112, CELL_H = 132, X0 = 14, Y0 = 12;
+function buildItems(host) {
+  const els = files.map(f => {
+    const d = document.createElement('div'); d.className = 'item';
+    d.innerHTML = `<div class="bg"></div><div class="th"><img src="${f.thumb}" alt=""></div><div class="nm">${f.name}</div>`;
+    host.appendChild(d); return d;
+  });
+  return els;
+}
+const itemEls = buildItems($('#items'));
+function layout(els, showNew, selected, hovered, rewind = 0) {
+  let n = 0; const rects = [];
+  files.forEach((f, i) => {
+    const el = els[i], vis = !f.isNew || showNew;
+    el.style.display = vis ? '' : 'none';
+    if (!vis) return;
+    let x = X0 + (n % COLS) * CELL_W, y = Y0 + Math.floor(n / COLS) * CELL_H; n++;
+    // loop reset: the file area dips out and comes back in its frame-0 state
+    el.style.opacity = rewind > 0 ? Math.abs(1 - 2 * rewind) : '';
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.classList.toggle('sel', !!selected[i]); el.classList.toggle('hov', !selected[i] && hovered === i);
+    rects[i] = [x, y, x + 104, y + 126];
+  });
+  return rects;
+}
+// Thumbnail centre of an original photo, in stage (explorer) coordinates, with only the 6 originals shown.
+const CONTENT_X = 209, CONTENT_Y = 137;
+const thumbC = j => [CONTENT_X + X0 + j * CELL_W + 52, CONTENT_Y + Y0 + 4 + 60];
+
+/* ---------- progress list ---------- */
+const ICON = {
+  refresh: c => `<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,
+  check: c => `<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  folder: c => `<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+  left: c => `<svg width="SZ" height="SZ" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
+};
+const icon = (n, c, s) => ICON[n](c).replace(/SZ/g, s);
+const rowEls = R.rows.map(r => {
+  const d = document.createElement('div'); d.className = 'prow';
+  d.innerHTML = `<div class="dot"></div><div class="mid"><div class="l1"><span class="name">${r.name}</span><span class="pill mono">→ WebP</span></div><div class="l2"></div></div><div class="acts"></div>`;
+  $('#plist').appendChild(d); return d;
+});
+let lastRowState = [];
+function setRow(i, st, frac) {
+  const key = st + ':' + frac; if (lastRowState[i] === key) return; lastRowState[i] = key;
+  const d = rowEls[i], r = R.rows[i], dot = d.querySelector('.dot'), l2 = d.querySelector('.l2'), acts = d.querySelector('.acts');
+  if (st === 'run') {
+    dot.style.background = 'var(--info-fill)'; dot.style.borderColor = 'var(--info-border)'; dot.innerHTML = icon('refresh', '#60cdff', 12);
+    l2.innerHTML = `<div class="rb"><div class="trk"></div><div class="val" style="width:${frac * 112}px"></div></div><span>${Math.round(frac * 100)}%</span>`;
+    acts.innerHTML = '';
+  } else {
+    dot.style.background = 'var(--success-fill)'; dot.style.borderColor = 'var(--success-border)'; dot.innerHTML = icon('check', '#6ccb5f', 12);
+    l2.innerHTML = `<span>${r.sizes}</span><span class="pill ok">${r.change}</span>`;
+    acts.innerHTML = `<div class="sbtn">Open</div><div class="sbtn ico">${icon('folder', '#f3f3f3', 14)}</div>`;
+  }
+}
+let lastHead = '';
+function setHead(finished, done, overall) {
+  const k = finished + ':' + done + ':' + overall.toFixed(3); if (k === lastHead) return; lastHead = k;
+  const b = $('#pbadge');
+  if (finished) { b.style.background = 'var(--success-fill)'; b.style.borderColor = 'var(--success-border)'; b.innerHTML = icon('check', '#6ccb5f', 18); $('#ptitle').textContent = R.summary; }
+  else { b.style.background = 'var(--info-fill)'; b.style.borderColor = 'var(--info-border)'; b.innerHTML = icon('refresh', '#60cdff', 18); $('#ptitle').textContent = `Converting ${R.rows.length} files…`; }
+  $('#pcount').textContent = `${done} / ${R.rows.length}`;
+  $('#poverall').style.display = finished ? 'none' : '';
+  $('#pval').style.width = `calc(${overall * 100}% )`;
+  $('#ppct').textContent = Math.round(overall * 100) + '%';
+  $('#pfoot').innerHTML = finished
+    ? `<div class="btn">${icon('left', '#fff', 18)}Adjust options</div><div class="sp"></div><div class="btn">${icon('folder', '#fff', 18)}Open folder</div><div class="btn primary" id="bclose">Close</div>`
+    : `<div class="btn">Cancel all</div><div class="sp"></div><div class="btn">Run in background</div>`;
+}
+$('#hsize').textContent = R.totalIn;
+
+/* ---------- geometry of things the cursor visits (stage coordinates) ---------- */
+const MENU_X = thumbC(1)[0] - 6, MENU_Y = thumbC(1)[1] + 8;     // right-click point
+const ctx = $('#ctx'), sub = $('#sub'), win = $('#win');
+ctx.style.left = MENU_X + 'px'; ctx.style.top = MENU_Y + 'px';
+const rowMorph = $('#r-morph');
+const morphY = () => MENU_Y + rowMorph.offsetTop + 16;
+const SUB_X = () => MENU_X + ctx.offsetWidth - 4;
+const SUB_Y = () => MENU_Y + rowMorph.offsetTop - 4;
+const WIN_X = 179, WIN_Y = 40;
+win.style.left = WIN_X + 'px'; win.style.top = WIN_Y + 'px';
+
+/* ---------- timeline (seconds) ---------- */
+const T = {
+  dragDown: 0.45, dragUp: 1.35, rclick: 1.95, menuOpen: 2.0,
+  morphHover: 2.55, subOpen: 2.85, webpHover: 3.4, click: 3.9, menuClose: 3.95,
+  winOpen: 4.05, convClick: 6.15, page: 6.25,
+  done: [7.15, 7.35, 7.6, 7.95, 8.15, 8.45], finished: 8.55,
+  closeClick: 11.0, winClose: 11.1, refresh: 11.3, deselect: 12.55, fadeA: 13.1, fadeB: 13.6,
+};
+function cursorPath(t) {
+  const sx = SUB_X(), my = morphY(), sy = SUB_Y();
+  const subRow = i => sy + 4 + i * 32 + 16;
+  const conv = [WIN_X + 1 + 16 + 568 - 12 - 40, WIN_Y + 31 + 640 - 16 - 12 - 16];   // "Convert 6" button centre
+  const close = [WIN_X + 1 + 600 - 16 - 27, WIN_Y + 31 + 640 - 16 - 16];             // "Close" button centre
+  const empty = [CONTENT_X + 560, CONTENT_Y + 360];
+  const drag0 = [CONTENT_X + X0 + 6 * CELL_W + 26, CONTENT_Y + Y0 + 146], drag1 = [CONTENT_X + 6, CONTENT_Y + 4];
+  const k = [
+    [0.0, [drag0[0] + 15, drag0[1] + 90]],
+    [T.dragDown - 0.05, drag0, 'inOut'],
+    [T.dragUp, drag1, 'inOut'],
+    [T.rclick - 0.1, [MENU_X, MENU_Y], 'softLand'],
+    [T.menuOpen + 0.1, [MENU_X, MENU_Y]],
+    [T.morphHover, [MENU_X + 92, my], 'softLand'],
+    [T.subOpen + 0.1, [MENU_X + 160, my], 'cruise'],
+    [T.subOpen + 0.35, [sx + 120, subRow(0)], 'softLand'],
+    [T.webpHover, [sx + 150, subRow(2)], 'softLand'],
+    [T.click, [sx + 152, subRow(2)]],
+    [T.winOpen + 0.6, [WIN_X + 640, WIN_Y + 300], 'softLand'],
+    [T.convClick - 0.95, [WIN_X + 650, WIN_Y + 310], 'cruise'],
+    [T.convClick - 0.15, conv, 'inOut'],
+    [T.convClick + 0.4, conv],
+    [T.convClick + 1.1, [conv[0] - 90, conv[1] + 40], 'softLand'],
+    [T.closeClick - 0.15, close, 'inOut'],
+    [T.closeClick + 0.3, close],
+    [T.deselect - 0.15, empty, 'inOut'],
+    [T.deselect + 0.2, empty],
+    [DUR, [drag0[0] + 15, drag0[1] + 90], 'inOut'],
+  ];
+  return key(t, k);
+}
+// camera: [x, y, scale] = stage point at the frame centre; always kept inside the 960x800 Explorer
+function camAt(t) {
+  const sx = SUB_X(), sy = SUB_Y();
+  const A = [480, 300, 1.0];
+  const M1 = [MENU_X + 160, MENU_Y + 175, 1.25];
+  const M2 = [sx + 20, sy + 150, 1.36];
+  const WT = [480, 300, 1.0], WB = [480, 420, 1.0];
+  const D = [WIN_X + 250, WIN_Y + 215, 1.24];
+  const [x, y, s] = key(t, [
+    [0, A], [T.rclick, A],
+    [T.menuOpen + 0.55, M1, 'inOut'],
+    [T.subOpen + 0.1, M1],
+    [T.webpHover, M2, 'inOut'],
+    [T.click, M2],
+    [T.winOpen + 0.45, WT, 'inOut'],
+    [T.convClick - 0.85, WT],
+    [T.convClick - 0.1, WB, 'inOut'],
+    [T.page + 0.05, WB],
+    [T.page + 0.6, WT, 'inOut'],
+    [T.finished + 0.1, WT],
+    [T.finished + 0.9, D, 'inOut'],
+    [T.closeClick - 0.85, D],
+    [T.closeClick - 0.15, WB, 'inOut'],
+    [T.winClose + 0.15, WB],
+    [T.refresh + 0.7, A, 'inOut'],
+  ]);
+  const hx = 480 / s, hy = 300 / s;
+  return [Math.min(Math.max(x, hx), 960 - hx), Math.min(Math.max(y, hy), 800 - hy), s];
+}
+
+/* ---------- render ---------- */
+function render(t) {
+  // camera (log-scale interpolation keeps the zoom speed even)
+  const [cx, cy, cs] = camAt(t);
+  $('#cam').style.transform = `translate(${480 - cx * cs}px, ${300 - cy * cs}px) scale(${cs})`;
+
+  // cursor + press squash
+  const [px, py] = cursorPath(t);
+  const press = [T.dragDown, T.rclick, T.click, T.convClick, T.closeClick, T.deselect].reduce((s, a) => Math.min(s, t >= a && t < a + 0.25 ? 1 - 0.14 * Math.sin(Math.PI * (t - a) / 0.25) : 1), 1);
+  const cur = $('#cursor'); cur.style.transform = `translate(${px}px, ${py}px) scale(${press})`;
+
+  // marquee + selection
+  const marq = $('#marquee');
+  const showNew = t >= T.refresh;
+  let selected = {}, hovered = -1;
+  if (t >= T.dragDown && t < T.dragUp) {
+    const [ax, ay] = cursorPath(T.dragDown), bx = px, by = py;
+    const x0 = Math.min(ax, bx) - CONTENT_X, y0 = Math.min(ay, by) - CONTENT_Y, x1 = Math.max(ax, bx) - CONTENT_X, y1 = Math.max(ay, by) - CONTENT_Y;
+    marq.style.display = ''; Object.assign(marq.style, { left: x0 + 'px', top: y0 + 'px', width: (x1 - x0) + 'px', height: (y1 - y0) + 'px' });
+    files.forEach((f, i) => { if (f.isNew) return; const j = f.jpg, rx0 = X0 + j * CELL_W, ry0 = Y0; if (rx0 < x1 && rx0 + 104 > x0 && ry0 < y1 && ry0 + 126 > y0) selected[i] = true; });
+  } else marq.style.display = 'none';
+  if (t >= T.dragUp && t < T.deselect) files.forEach((f, i) => { if (!f.isNew) selected[i] = true; });
+  if (t < T.dragDown) { // hover before the drag
+    hovered = -1;
+  }
+  const kr = P(t, T.fadeA, T.fadeB, 'cruise');
+  layout(itemEls, showNew && kr < 0.5, selected, hovered, kr);
+  const nSel = Object.keys(selected).length;
+  $('#st1').textContent = `${showNew && kr < 0.5 ? 12 : 6} items`;
+  $('#st2').textContent = nSel ? `${nSel} item${nSel > 1 ? 's' : ''} selected  ${nSel === 6 ? R.totalIn : ''}` : '';
+  document.querySelector('#status .bar').style.display = nSel ? '' : 'none';
+  document.querySelectorAll('.cmdsel').forEach(e => e.classList.toggle('dis', nSel === 0));
+
+  // context menu
+  const menuOn = t >= T.menuOpen && t < T.menuClose;
+  ctx.style.display = menuOn ? '' : 'none';
+  if (menuOn) { const k = P(t, T.menuOpen, T.menuOpen + 0.15, 'softLand'); ctx.style.opacity = k; ctx.style.transform = `translateY(${(1 - k) * -10}px)`; }
+  rowMorph.classList.toggle('h', t >= T.morphHover - 0.12 && t < T.menuClose);
+  const subOn = t >= T.subOpen && t < T.menuClose;
+  sub.style.display = subOn ? '' : 'none';
+  if (subOn) { sub.style.left = SUB_X() + 'px'; sub.style.top = SUB_Y() + 'px'; const k = P(t, T.subOpen, T.subOpen + 0.12, 'softLand'); sub.style.opacity = k; sub.style.transform = `translateX(${(1 - k) * -8}px)`; }
+  // submenu hover follows the cursor row
+  const sy = SUB_Y();
+  ['#s0', '#s1', '#s2', '#s3', '#s4'].forEach((s, i) => { const y0 = sy + 4 + i * 32; $(s).classList.toggle('h', subOn && px > SUB_X() + 4 && py >= y0 && py < y0 + 32); });
+  if (subOn && px > SUB_X() + 4) rowMorph.classList.add('h');
+
+  // Morph window
+  const winOn = t >= T.winOpen && t < T.winClose + 0.16;
+  win.style.display = winOn ? '' : 'none';
+  if (winOn) {
+    const kin = P(t, T.winOpen, T.winOpen + 0.14, 'softLand'), kout = P(t, T.winClose, T.winClose + 0.15, 'accelExit');
+    win.style.opacity = Math.min(kin, 1 - kout);
+    win.style.transform = `scale(${0.96 + 0.04 * kin - 0.04 * kout})`;
+  }
+  const onProgress = t >= T.page;
+  $('#pconv').style.display = onProgress ? 'none' : '';
+  $('#pg').style.display = onProgress ? '' : 'none';
+  $('#bconv').classList.toggle('hover', t >= T.convClick - 0.2 && t < T.page);
+  if (onProgress) {
+    let done = 0;
+    R.rows.forEach((r, i) => {
+      const td = T.done[i], start = T.page + (i < 3 ? 0.15 : 0.55);
+      if (t >= td) { setRow(i, 'done'); done++; }
+      else setRow(i, 'run', t >= start + 0.25 ? 0.3 : 0);
+    });
+    const finished = t >= T.finished;
+    const overall = finished ? 1 : R.rows.reduce((s, r, i) => s + (t >= T.done[i] ? 1 : t >= T.page + (i < 3 ? 0.4 : 0.8) ? 0.3 : 0), 0) / R.rows.length;
+    setHead(finished, done, overall);
+    const bc = document.getElementById('bclose'); if (bc) bc.classList.toggle('hover', t >= T.closeClick - 0.2);
+  }
+
+}
+
+// review helper: the Morph window alone at 1:1 (compare.mjs puts it beside a capture of the real app)
+window.__winShot = t => { render(t); $('#main').style.height = '700px'; $('#cam').style.transform = `translate(${-WIN_X}px, ${-WIN_Y}px)`; win.style.transform = 'none'; win.style.opacity = 1; $('#cursor').style.display = 'none'; };
+window.__seek = t => { render(Math.max(0, Math.min(DUR, t))); };
+window.__duration = DUR;
+window.__fps = FPS;
+window.__ready = document.fonts.ready;
+window.addEventListener('load', () => document.fonts.ready.then(() => render(0)));
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Design tokens: surfaces,
+// borders, text, category and status colours, radii, spacing, type ramp.
+// Light and dark follow `Palette.color-scheme` (Settings → Appearance or the
+// system). The accent is the Windows accent colour: Slint's Fluent palette
+// reads it from the system (`Palette.accent-background`), never hardcode blue.
+// No user-visible strings here.
+
+import { Palette } from "std-widgets.slint";
+
+// Category ids used across the UI (`Theme.category-*`, icons, cards).
+// Rust: `controller::CAT_*` (keep in sync).
+//   0 images · 1 PDF · 2 video · 3 audio · 4 documents · 5 mixed
+// Status ids (`ProgressRow.status`): 0 waiting · 1 running · 2 done · 3 failed
+// · 4 skipped · 5 cancelled.
+
+export global Theme {
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    // ── Surfaces & elevation (md §1.1) ──
+    out property <color> surface-window: dark ? #202020 : #f3f3f3;
+    out property <color> surface-sidebar: dark ? #1b1b1b : #ebebeb;
+    out property <color> surface-card: dark ? #2b2b2b : #ffffff;
+    out property <color> surface-card-subtle: dark ? #262626 : #f9f9f9;
+    out property <color> surface-pill-track: dark ? #191919 : #e6e6e6;
+    // Text boxes and inactive chips (prototype `input` / `chipInactive`).
+    out property <color> surface-input: dark ? #323232 : #ffffff;
+    out property <color> surface-hover: dark ? #ffffff0f : #0000000a;
+    out property <color> surface-pressed: dark ? #ffffff0a : #00000006;
+    out property <color> border-card: dark ? #3a3a3a : #e5e5e5;
+    out property <color> border-subtle: dark ? #353535 : #e4e4e4;
+    out property <color> border-input: dark ? #454545 : #d4d4d4;
+    out property <color> border-chip: dark ? #424242 : #d9d9d9;
+    out property <color> border-chip-hover: dark ? #606060 : #999999;
+    // Dims the window behind a modal card (error details), and its shadow.
+    out property <color> scrim: dark ? #0000008c : #00000066;
+    out property <color> shadow: #0000004d;
+
+    // ── Text ──
+    out property <color> text-primary: dark ? #f3f3f3 : #1b1b1b;
+    out property <color> text-secondary: dark ? #c6c6c6 : #4f4f4f;
+    out property <color> text-muted: dark ? #a6a6a6 : #616161;
+    out property <color> text-disabled: dark ? #ffffff5c : #0000005c;
+
+    // ── Accent (Windows accent colour via the Fluent palette) ──
+    out property <brush> accent: Palette.accent-background;
+    out property <brush> accent-foreground: Palette.accent-foreground;
+    // Selected chip / segment tint and its text.
+    out property <brush> accent-tint: Palette.accent-background.with-alpha(dark ? 0.22 : 0.10);
+    out property <brush> accent-text: Palette.accent-background;
+
+    // ── Status pills & banners (md §1.2) ──
+    out property <color> success-fill: dark ? #1e3a24 : #dff6dd;
+    out property <color> success-border: dark ? #2d5936 : #b7e8b4;
+    out property <color> success-text: dark ? #6ccb5f : #0f7b0f;
+    out property <color> warning-fill: dark ? #433519 : #fff4ce;
+    out property <color> warning-border: dark ? #6b5a1e : #e3c565;
+    out property <color> warning-text: dark ? #fce181 : #5c4800;
+    out property <color> error-fill: dark ? #442226 : #fde7e9;
+    out property <color> error-border: dark ? #6e343a : #f5b9bf;
+    out property <color> error-text: dark ? #ff99a4 : #c42b1c;
+    // Running / info pill (prototype `badgeBlue`).
+    out property <color> info-fill: dark ? #19324c : #e5f1fb;
+    out property <color> info-border: dark ? #274e78 : #b3d7f2;
+    out property <color> info-text: dark ? #60cdff : #005fb8;
+
+    // ── Category badges (md §1.2), by category id ──
+    public pure function category-fill(category: int) -> color {
+        if (category == 0) { return dark ? #172a45 : #eff6ff; }
+        if (category == 1) { return dark ? #3b1d24 : #fff1f2; }
+        if (category == 2) { return dark ? #2c1d42 : #faf5ff; }
+        if (category == 3) { return dark ? #3b2a14 : #fffbeb; }
+        if (category == 4) { return dark ? #133332 : #f0fdfa; }
+        return dark ? #33344a : #eef2ff;
+    }
+    public pure function category-border(category: int) -> color {
+        if (category == 0) { return dark ? #264b78 : #bfdbfe; }
+        if (category == 1) { return dark ? #6e303d : #fecdd3; }
+        if (category == 2) { return dark ? #52347c : #e9d5ff; }
+        if (category == 3) { return dark ? #6e4e23 : #fde68a; }
+        if (category == 4) { return dark ? #235c59 : #99f6e4; }
+        return dark ? #3c3d66 : #c7d2fe;
+    }
+    public pure function category-text(category: int) -> color {
+        if (category == 0) { return dark ? #60cdff : #1d4ed8; }
+        if (category == 1) { return dark ? #ff99a4 : #be123c; }
+        if (category == 2) { return dark ? #d8b4fe : #7e22ce; }
+        if (category == 3) { return dark ? #fcd34d : #b45309; }
+        if (category == 4) { return dark ? #5eead4 : #0f766e; }
+        return dark ? #a5b4fc : #4338ca;
+    }
+    // Icon / text colour of a result row status.
+    public pure function status-color(status: int) -> color {
+        if (status == 1) { return info-text; }
+        if (status == 2) { return success-text; }
+        if (status == 3) { return error-text; }
+        return text-muted;
+    }
+
+    // ── Radii ──
+    out property <length> radius-card: 10px;
+    out property <length> radius-control: 6px;
+    out property <length> radius-chip: 6px;
+    out property <length> radius-track: 8px;
+    out property <length> radius-badge: 8px;
+
+    // ── Spacing ──
+    out property <length> space-xs: 4px;
+    out property <length> space-s: 8px;
+    out property <length> space-m: 12px;
+    out property <length> space-l: 16px;
+    out property <length> space-xl: 24px;
+    // Window padding around the cards.
+    out property <length> window-padding: 16px;
+
+    // ── Type ramp (Windows 11: Segoe UI Variable via the system font) ──
+    out property <length> font-caption: 12px;
+    out property <length> font-body: 14px;
+    out property <length> font-body-large: 16px;
+    out property <length> font-subtitle: 20px;
+    out property <length> font-title: 28px;
+    out property <int> weight-regular: 400;
+    out property <int> weight-semibold: 600;
+    out property <int> weight-bold: 700;
+    // Monospace target pills ("→ WEBP").
+    // (Consolas ships with every Windows.)
+    out property <string> font-mono: "Consolas";
+
+    // ── Motion ──
+    out property <duration> motion-fast: 120ms;
+    out property <duration> motion-normal: 200ms;
+}

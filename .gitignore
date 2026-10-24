@@ -1,0 +1,9 @@
+/target/
+/vendor/
+/layout/
+*.msix
+*.pfx
+*.cer
+.claude/settings.local.json
+.claude/worktrees/
+/packaging/cert/

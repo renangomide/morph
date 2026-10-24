@@ -1,0 +1,13 @@
+{
+  "$comment": "Native image decoders for morph-core (SPEC §7). Install with: vcpkg install --triplet x64-windows-static --x-install-root=%VCPKG_ROOT%\\installed (from the repo root). libheif decodes HEIC (libde265) and AVIF (aom); both are linked statically, no extra DLLs ship.",
+  "name": "morph",
+  "version-string": "0.1.0",
+  "builtin-baseline": "664933b8d385dfc01f4e0cdff4c7c74e71f6a740",
+  "dependencies": [
+    {
+      "name": "libheif",
+      "default-features": false,
+      "features": ["aom"]
+    }
+  ]
+}

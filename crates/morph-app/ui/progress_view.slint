@@ -1,0 +1,674 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Progress / results view (SPEC §3.3) and the message page:
+// `ProgressView` (`page == 1`), `MessageView` (`page == 2`), `DetailsOverlay`.
+// Data and callbacks: `ProgressUi` (Rust:
+// `controller.rs`); rows: `ProgressRow` (Rust: `src/progress_text.rs::row`);
+// text: `ProgressText` (Rust: `src/progress_text.rs`, `src/strings/background.rs`).
+// No user-visible strings here.
+
+import { Button, ListView, ProgressIndicator, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Icons, Icon } from "icons.slint";
+import { Card, Pill } from "widgets.slint";
+
+// status: 0 waiting, 1 running, 2 done, 3 failed, 4 skipped, 5 cancelled.
+export struct ProgressRow {
+    status: int,
+    // Full input name ("IMG_0012.jpg"), or "3 files" for a merge.
+    name: string,
+    // Target pill: "→ WebP", "→ Merged.pdf", "Compress"; empty = no pill.
+    target: string,
+    // "4.1 MB → 0.9 MB".
+    sizes: string,
+    // Size change pill "−78%" / "+12%"; empty = none.
+    change: string,
+    // The output is smaller (green change pill).
+    smaller: bool,
+    // Waiting… / 41% · about 2 min left / note / failure / skip reason.
+    message: string,
+    details: string,
+    fraction: float,
+    has-outputs: bool,
+    indeterminate: bool,
+}
+
+export global ProgressText {
+    in property <string> close;
+    in property <string> cancel-all;
+    in property <string> run-in-background;
+    in property <string> open-folder;
+    in property <string> open;
+    in property <string> show-in-folder;
+    in property <string> details;
+    in property <string> copy;
+    // "Copied" (Copy button, for a moment after a click).
+    in property <string> copied;
+    in property <string> details-title;
+    // "Adjust options" (finished view, back to the options page).
+    in property <string> adjust-options;
+}
+
+// Everything the progress, results and message pages show (Rust: `controller.rs`).
+export global ProgressUi {
+    // ── Progress page ──
+    in property <string> progress-title;
+    in property <string> progress-count;
+    in property <float> overall;
+    // Only slow engine conversions running, nothing finished: moving bar.
+    in property <bool> overall-indeterminate;
+    in property <bool> finished;
+    in property <bool> cancelling;
+    in property <bool> can-open-folder;
+    in property <[ProgressRow]> rows;
+    in-out property <bool> details-open;
+    in-out property <string> details-text;
+    // Set by the view when it opens the details: the row's name and message.
+    in-out property <string> details-name;
+    in-out property <string> details-message;
+    // ── Message page ──
+    in property <string> message-title;
+    in property <string> message;
+    in property <string> message-detail;
+
+    // ── M9 additions (foundation) ──
+    // Under the headline: "Saved next to the original files" / "Saved to C:\…".
+    in property <string> subtitle;
+    // The options of this job are still here: show "← Adjust options".
+    in property <bool> can-adjust;
+    // Finished, but not everything converted (failed, cancelled, nothing
+    // done): warning badge instead of the green check.
+    in property <bool> had-problems;
+
+    callback cancel-all();
+    callback run-in-background();
+    callback open-folder();
+    // Close (finished view, message page): back to the main window or quit.
+    callback close-window();
+    callback row-open(int);
+    callback row-show(int);
+    // "← Adjust options": the options page with the same files and options.
+    callback adjust-options();
+}
+
+// Round status badge of a result row (prototype: ✓ / ✕ / ⟳ / ·).
+component StatusDot inherits Rectangle {
+    in property <int> status;
+    in property <length> size: 20px;
+    width: root.size;
+    height: root.size;
+    border-radius: self.width / 2;
+    background: root.status == 1 ? Theme.info-fill : root.status == 2 ? Theme.success-fill : root.status == 3 ? Theme.error-fill : root.status >= 4 ? Theme.surface-card-subtle : transparent;
+    border-width: root.status == 0 ? 0 : 1px;
+    border-color: root.status == 1 ? Theme.info-border : root.status == 2 ? Theme.success-border : root.status == 3 ? Theme.error-border : Theme.border-card;
+    if root.status == 0: Rectangle {
+        width: 4px;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.text-muted;
+    }
+    if root.status != 0: Icon {
+        source: root.status == 1 ? Icons.refresh : root.status == 2 ? Icons.check : root.status == 3 ? Icons.close : @image-url("icons/minus.svg");
+        width: root.size * 0.6;
+        height: root.size * 0.6;
+        colorize: Theme.status-color(root.status);
+    }
+}
+
+// Small bordered button: a text ("Open", "Details…") or an icon (folder).
+// `danger`: the red Details… pill of a failed row.
+component SmallButton {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon;
+    // Accessible name (icon-only buttons have no tooltip in Slint 1.18).
+    in property <string> label: root.text;
+    in property <bool> danger;
+    callback clicked();
+
+    min-width: 28px;
+    height: 28px;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: fs;
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+        ta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
+        Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: root.danger ? Theme.error-border : Theme.border-input;
+            background: root.danger ? Theme.error-fill : Theme.surface-input;
+            Rectangle {
+                border-radius: Theme.radius-control;
+                background: ta.pressed ? Theme.surface-pressed : ta.has-hover ? Theme.surface-hover : transparent;
+            }
+        }
+        HorizontalLayout {
+            padding-left: root.text == "" ? 6px : 10px;
+            padding-right: root.text == "" ? 6px : 10px;
+            alignment: center;
+            if root.has-icon: VerticalLayout {
+                alignment: center;
+                Icon {
+                    source: root.icon;
+                    width: 14px;
+                    height: 14px;
+                    colorize: root.danger ? Theme.error-text : Theme.text-primary;
+                }
+            }
+            if root.text != "": Text {
+                text: root.text;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                color: root.danger ? Theme.error-text : Theme.text-primary;
+                vertical-alignment: center;
+            }
+        }
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-control;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// One result row (`SmartResultRow`): status badge, full input
+// name + mono target pill, sizes + savings pill (or bar / message), and
+// Open + folder (done) or Details… (failed) on the right.
+component ResultRow inherits Rectangle {
+    in property <ProgressRow> item;
+    in property <bool> first;
+    callback open();
+    callback show();
+    callback details();
+
+    // Divider between rows.
+    if !root.first: Rectangle {
+        x: 0;
+        y: 0;
+        height: 1phx;
+        background: Theme.border-subtle;
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 10px;
+
+        VerticalLayout {
+            alignment: center;
+            StatusDot {
+                status: root.item.status;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            spacing: 4px;
+
+            // Line 1: full name, then the target pill right after it.
+            HorizontalLayout {
+                spacing: 8px;
+                name := Text {
+                    horizontal-stretch: 0;
+                    min-width: 40px;
+                    text: root.item.name;
+                    font-size: Theme.font-body;
+                    font-weight: Theme.weight-semibold;
+                    color: root.item.status >= 4 ? Theme.text-secondary : Theme.text-primary;
+                    vertical-alignment: center;
+                    // Long names wrap (the end of a name matters, e.g. "(final).jpg").
+                    wrap: word-wrap;
+                }
+                if root.item.target != "": VerticalLayout {
+                    alignment: start;
+                    horizontal-stretch: 0;
+                    Pill {
+                        // Whole, unless it is a long new name: then at most ~40%.
+                        min-width: min(self.preferred-width, root.width * 0.4);
+                        max-width: max(self.min-width, root.width * 0.4);
+                        text: root.item.target;
+                        mono: true;
+                        text-color: Theme.text-muted;
+                    }
+                }
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+            }
+
+            // Line 2: running bar, sizes + change pill, or the message.
+            HorizontalLayout {
+                spacing: 8px;
+                if root.item.status == 1: VerticalLayout {
+                    alignment: center;
+                    width: 112px;
+                    ProgressIndicator {
+                        height: 4px;
+                        progress: root.item.fraction;
+                        indeterminate: root.item.indeterminate;
+                    }
+                }
+                if root.item.sizes != "": Text {
+                    text: root.item.sizes;
+                    font-size: Theme.font-caption;
+                    color: Theme.text-muted;
+                    vertical-alignment: center;
+                }
+                if root.item.change != "": VerticalLayout {
+                    alignment: center;
+                    Pill {
+                        text: root.item.change;
+                        strong: true;
+                        fill: root.item.smaller ? Theme.success-fill : Theme.surface-card-subtle;
+                        stroke: root.item.smaller ? Theme.success-border : Theme.border-card;
+                        text-color: root.item.smaller ? Theme.success-text : Theme.text-secondary;
+                    }
+                }
+                if root.item.message != "": Text {
+                    horizontal-stretch: 1;
+                    text: root.item.message;
+                    font-size: Theme.font-caption;
+                    color: root.item.status == 3 ? Theme.error-text : Theme.text-muted;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                }
+                if root.item.message == "": Rectangle {
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+
+        if root.item.has-outputs: VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                spacing: 6px;
+                SmallButton {
+                    text: ProgressText.open;
+                    clicked => {
+                        root.open();
+                    }
+                }
+                SmallButton {
+                    icon: Icons.folder;
+                    has-icon: true;
+                    label: ProgressText.show-in-folder;
+                    clicked => {
+                        root.show();
+                    }
+                }
+            }
+        }
+        if root.item.status == 3: VerticalLayout {
+            alignment: center;
+            SmallButton {
+                text: ProgressText.details;
+                danger: true;
+                clicked => {
+                    root.details();
+                }
+            }
+        }
+    }
+}
+
+export component ProgressView {
+    VerticalLayout {
+        padding: Theme.window-padding;
+        spacing: 14px;
+
+        // ── Summary banner card ──
+        Card {
+            inner-padding: 14px;
+            inner-spacing: 10px;
+            HorizontalLayout {
+                spacing: 10px;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        // 0 running, 1 all converted, 2 finished with problems.
+                        property <int> state: !ProgressUi.finished ? 0 : ProgressUi.had-problems ? 2 : 1;
+                        width: 32px;
+                        height: 32px;
+                        border-radius: Theme.radius-badge;
+                        border-width: 1px;
+                        border-color: self.state == 1 ? Theme.success-border : self.state == 2 ? Theme.warning-border : Theme.info-border;
+                        background: self.state == 1 ? Theme.success-fill : self.state == 2 ? Theme.warning-fill : Theme.info-fill;
+                        Icon {
+                            source: parent.state == 1 ? Icons.check : parent.state == 2 ? Icons.warning : Icons.refresh;
+                            width: 18px;
+                            height: 18px;
+                            colorize: parent.state == 1 ? Theme.success-text : parent.state == 2 ? Theme.warning-text : Theme.info-text;
+                        }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    Text {
+                        text: ProgressUi.progress-title;
+                        font-size: Theme.font-body-large;
+                        font-weight: Theme.weight-semibold;
+                        color: Theme.text-primary;
+                        wrap: word-wrap;
+                    }
+                    if ProgressUi.subtitle != "": Text {
+                        text: ProgressUi.subtitle;
+                        font-size: Theme.font-caption;
+                        color: Theme.text-muted;
+                        overflow: elide;
+                    }
+                }
+                if ProgressUi.progress-count != "": VerticalLayout {
+                    alignment: center;
+                    Pill {
+                        text: ProgressUi.progress-count;
+                        strong: true;
+                        text-color: Theme.text-primary;
+                    }
+                }
+            }
+
+            if !ProgressUi.finished: HorizontalLayout {
+                spacing: 12px;
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    ProgressIndicator {
+                        height: 6px;
+                        progress: ProgressUi.overall;
+                        indeterminate: ProgressUi.overall-indeterminate;
+                    }
+                }
+                Text {
+                    width: 40px;
+                    text: ProgressUi.overall-indeterminate ? "" : round(ProgressUi.overall * 100) + "%";
+                    font-size: Theme.font-caption;
+                    color: Theme.text-secondary;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // ── Result rows ──
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.surface-card;
+            border-radius: Theme.radius-card;
+            border-width: 1px;
+            border-color: Theme.border-card;
+            clip: true;
+            ListView {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+                for row[i] in ProgressUi.rows: ResultRow {
+                    item: row;
+                    first: i == 0;
+                    open => {
+                        ProgressUi.row-open(i);
+                    }
+                    show => {
+                        ProgressUi.row-show(i);
+                    }
+                    details => {
+                        ProgressUi.details-text = row.details;
+                        ProgressUi.details-name = row.name;
+                        ProgressUi.details-message = row.message;
+                        ProgressUi.details-open = true;
+                    }
+                }
+            }
+        }
+
+        // ── Footer ──
+        if !ProgressUi.finished: HorizontalLayout {
+            spacing: 8px;
+            Button {
+                text: ProgressText.cancel-all;
+                enabled: !ProgressUi.cancelling;
+                clicked => {
+                    ProgressUi.cancel-all();
+                }
+            }
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+            Button {
+                text: ProgressText.run-in-background;
+                clicked => {
+                    ProgressUi.run-in-background();
+                }
+            }
+        }
+
+        if ProgressUi.finished: HorizontalLayout {
+            spacing: 8px;
+            // "← Adjust options": back to the options page, same files and options.
+            if ProgressUi.can-adjust: Button {
+                text: ProgressText.adjust-options;
+                icon: Icons.arrow-left;
+                colorize-icon: true;
+                clicked => {
+                    ProgressUi.adjust-options();
+                }
+            }
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+            if ProgressUi.can-open-folder: Button {
+                text: ProgressText.open-folder;
+                icon: Icons.folder;
+                colorize-icon: true;
+                clicked => {
+                    ProgressUi.open-folder();
+                }
+            }
+            Button {
+                text: ProgressText.close;
+                primary: true;
+                clicked => {
+                    ProgressUi.close-window();
+                }
+            }
+        }
+    }
+}
+
+export component MessageView {
+    VerticalLayout {
+        padding: Theme.window-padding;
+        spacing: 14px;
+        Card {
+            inner-padding: 16px;
+            inner-spacing: 8px;
+            HorizontalLayout {
+                spacing: 12px;
+                VerticalLayout {
+                    alignment: start;
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: Theme.radius-badge;
+                        border-width: 1px;
+                        border-color: Theme.info-border;
+                        background: Theme.info-fill;
+                        Icon {
+                            source: Icons.info;
+                            width: 18px;
+                            height: 18px;
+                            colorize: Theme.info-text;
+                        }
+                    }
+                }
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 6px;
+                    Text {
+                        text: ProgressUi.message-title;
+                        font-size: Theme.font-body-large;
+                        font-weight: Theme.weight-semibold;
+                        color: Theme.text-primary;
+                        wrap: word-wrap;
+                    }
+                    if ProgressUi.message != "": Text {
+                        text: ProgressUi.message;
+                        font-size: Theme.font-body;
+                        color: Theme.text-primary;
+                        wrap: word-wrap;
+                    }
+                    if ProgressUi.message-detail != "": Text {
+                        text: ProgressUi.message-detail;
+                        font-size: Theme.font-caption;
+                        color: Theme.text-muted;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+        }
+        HorizontalLayout {
+            alignment: end;
+            Button {
+                text: ProgressText.close;
+                primary: true;
+                clicked => {
+                    ProgressUi.close-window();
+                }
+            }
+        }
+    }
+}
+
+// Error details (prototype's modal): a card over a dimmed window with the
+// file name, the plain message, the copyable technical details, Copy + Close.
+export component DetailsOverlay inherits Rectangle {
+    // Closed (Esc or Close): main.slint gives the focus back.
+    callback closed();
+    property <bool> just-copied;
+    background: Theme.scrim;
+    TouchArea { }
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                ProgressUi.details-open = false;
+                root.closed();
+                return accept;
+            }
+            reject
+        }
+        VerticalLayout {
+            padding: Theme.window-padding;
+            alignment: center;
+            Rectangle {
+                max-width: 560px;
+                background: Theme.surface-window;
+                border-radius: Theme.radius-card + 2px;
+                border-width: 1px;
+                border-color: Theme.border-card;
+                drop-shadow-blur: 24px;
+                drop-shadow-offset-y: 8px;
+                drop-shadow-color: Theme.shadow;
+                VerticalLayout {
+                    padding: 18px;
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            alignment: center;
+                            StatusDot {
+                                status: 3;
+                                size: 24px;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            horizontal-stretch: 1;
+                            Text {
+                                text: ProgressText.details-title;
+                                font-size: Theme.font-body-large;
+                                font-weight: Theme.weight-semibold;
+                                color: Theme.text-primary;
+                            }
+                            if ProgressUi.details-name != "": Text {
+                                text: ProgressUi.details-name;
+                                font-size: Theme.font-caption;
+                                color: Theme.text-muted;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                    if ProgressUi.details-message != "": Text {
+                        text: ProgressUi.details-message;
+                        font-size: Theme.font-body;
+                        color: Theme.text-primary;
+                        wrap: word-wrap;
+                    }
+                    details-edit := TextEdit {
+                        min-height: 140px;
+                        max-height: 300px;
+                        read-only: true;
+                        wrap: word-wrap;
+                        font-size: Theme.font-caption;
+                        font-family: Theme.font-mono;
+                        text: ProgressUi.details-text;
+                    }
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 8px;
+                        Button {
+                            text: root.just-copied ? ProgressText.copied : ProgressText.copy;
+                            icon: root.just-copied ? Icons.check : @image-url("");
+                            colorize-icon: true;
+                            clicked => {
+                                details-edit.select-all();
+                                details-edit.copy();
+                                details-edit.clear-selection();
+                                root.just-copied = true;
+                            }
+                        }
+                        Button {
+                            text: ProgressText.close;
+                            primary: true;
+                            clicked => {
+                                ProgressUi.details-open = false;
+                                root.closed();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Timer {
+        interval: 1500ms;
+        running: root.just-copied;
+        triggered => {
+            root.just-copied = false;
+        }
+    }
+}

@@ -1,0 +1,113 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Root window: switches between the views and holds the keyboard shortcuts.
+// The views live in their own files:
+//   convert_view.slint  page 0  conversion window options
+//   progress_view.slint page 1  progress / results, page 2 message
+//   shell_view.slint    page 3  main window (drop zone + Settings),
+//                       page 4  Settings inside the conversion window
+// Shared: theme.slint (tokens), icons.slint, widgets.slint.
+// No user-visible strings here.
+
+import { Palette } from "std-widgets.slint";
+import { ConvertView, ConvertUi, Strings, FileRow, SkippedFile, FormatInfo, AudioFormatInfo, Toggle, CategoryCard } from "convert_view.slint";
+import { ProgressView, MessageView, DetailsOverlay, ProgressUi, ProgressText, ProgressRow } from "progress_view.slint";
+import { HomePage, SettingsView, HomeUi } from "shell_view.slint";
+import { Theme } from "theme.slint";
+
+// Globals and structs Rust uses (`window.global::<…>()`, model rows).
+export { ConvertUi, Strings, ProgressUi, ProgressText, HomeUi, FileRow, SkippedFile, FormatInfo, AudioFormatInfo, Toggle, CategoryCard, ProgressRow }
+
+export component MainWindow inherits Window {
+    // 0 = options, 1 = progress / results, 2 = message, 3 = main window,
+    // 4 = Settings opened from the conversion window.
+    in-out property <int> page;
+    in property <string> window-title;
+    // Settings → Appearance: 0 = system, 1 = light, 2 = dark.
+    in property <int> theme;
+    changed theme => {
+        Palette.color-scheme = root.theme == 1 ? ColorScheme.light : root.theme == 2 ? ColorScheme.dark : ColorScheme.unknown;
+    }
+
+    // Esc (no overlay open): cancel / close / back, decided in Rust.
+    callback escape();
+
+    title: root.window-title;
+    // App logo, generated from packaging/icon/morph.svg by packaging/make-assets.ps1.
+    icon: @image-url("../../../packaging/Assets/Square44x44Logo.targetsize-64.png");
+    // Size when the window opens: main window (Start menu)
+    // 780×580, conversion window 600×640. Only the first size: later page
+    // changes keep the window as it is (no jumping, the user's own size kept).
+    // Rust: `platform::placement` (first guess of the size, keep in sync).
+    preferred-width: root.page == 3 ? 780px : 600px;
+    preferred-height: root.page == 3 ? 580px : 640px;
+    // The main window's navigation rail needs more room than the
+    // conversion window.
+    min-width: root.page == 3 ? 640px : 420px;
+    min-height: 420px;
+    background: Theme.surface-window;
+    forward-focus: keys;
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                if (ProgressUi.details-open) {
+                    ProgressUi.details-open = false;
+                } else {
+                    root.escape();
+                }
+                return accept;
+            }
+            // Ctrl+Tab / Ctrl+PageDown: next type tab; with Shift / PageUp: previous.
+            if (root.page == 0 && ConvertUi.type-tabs.length > 1 && event.modifiers.control
+                && (event.text == Key.Tab || event.text == Key.Backtab || event.text == Key.PageDown || event.text == Key.PageUp)) {
+                if ((event.text == Key.Tab && !event.modifiers.shift) || event.text == Key.PageDown) {
+                    ConvertUi.type-tab = Math.mod(ConvertUi.type-tab + 1, ConvertUi.type-tabs.length);
+                } else {
+                    ConvertUi.type-tab = Math.mod(ConvertUi.type-tab + ConvertUi.type-tabs.length - 1, ConvertUi.type-tabs.length);
+                }
+                ConvertUi.form-error = "";
+                ConvertUi.type-tab-changed();
+                return accept;
+            }
+            if (event.text == Key.Return && !ProgressUi.details-open) {
+                if (root.page == 0) {
+                    ConvertUi.convert();
+                    return accept;
+                }
+                if (root.page == 1 && ProgressUi.finished) {
+                    ProgressUi.close-window();
+                    return accept;
+                }
+            }
+            reject
+        }
+
+        if root.page == 0: ConvertView {
+            width: 100%;
+            height: 100%;
+        }
+        if root.page == 1: ProgressView {
+            width: 100%;
+            height: 100%;
+        }
+        if root.page == 2: MessageView {
+            width: 100%;
+            height: 100%;
+        }
+        if root.page == 3: HomePage {
+            width: 100%;
+            height: 100%;
+        }
+        if root.page == 4: SettingsView {
+            width: 100%;
+            height: 100%;
+        }
+    }
+
+    // Details overlay (on top of everything).
+    if ProgressUi.details-open: DetailsOverlay {
+        closed => {
+            keys.focus();
+        }
+    }
+}

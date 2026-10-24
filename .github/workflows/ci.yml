@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# fmt, clippy, tests, and a test-signed MSIX artifact (SPEC §11).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # LibreOffice / MS Office are not on the runner: those tests print "SKIPPED: ..." and pass.
+      - name: Test
+        run: cargo test --workspace
+
+      # Self-signed "CN=OpenMorph" cert made on the runner, so the package is test-signed only.
+      - name: Package MSIX (test-signed)
+        run: |
+          .\packaging\dev-cert.ps1
+          .\packaging\make-msix.ps1 -RequireSigned
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: morph-msix-test-signed
+          path: |
+            target/Morph-*-x64.msix
+            packaging/cert/morph-dev.cer
+          if-no-files-found: error

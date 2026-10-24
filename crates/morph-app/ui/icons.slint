@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Vector icons (ui/icons/*.svg, Feather-style 24×24 strokes; Feather is MIT,
+// see ui/icons/LICENSE-feather.txt and THIRD_PARTY_NOTICES.md). They are
+// drawn black and tinted with `colorize`, so they follow light / dark mode.
+// Add an icon: drop the SVG in ui/icons/, add a property here.
+
+import { Theme } from "theme.slint";
+
+export global Icons {
+    // Categories (by id: Theme category ids).
+    out property <image> image: @image-url("icons/image.svg");
+    out property <image> pdf: @image-url("icons/pdf.svg");
+    out property <image> video: @image-url("icons/video.svg");
+    out property <image> audio: @image-url("icons/audio.svg");
+    out property <image> document: @image-url("icons/document.svg");
+    out property <image> mixed: @image-url("icons/mixed.svg");
+    // Status.
+    out property <image> check: @image-url("icons/check.svg");
+    out property <image> error: @image-url("icons/error.svg");
+    out property <image> warning: @image-url("icons/warning.svg");
+    out property <image> info: @image-url("icons/info.svg");
+    out property <image> refresh: @image-url("icons/refresh.svg");
+    // Actions & navigation.
+    out property <image> gear: @image-url("icons/gear.svg");
+    out property <image> folder: @image-url("icons/folder.svg");
+    out property <image> upload: @image-url("icons/upload.svg");
+    out property <image> close: @image-url("icons/close.svg");
+    out property <image> grip: @image-url("icons/grip.svg");
+    out property <image> arrow-up: @image-url("icons/arrow-up.svg");
+    out property <image> arrow-down: @image-url("icons/arrow-down.svg");
+    out property <image> arrow-left: @image-url("icons/arrow-left.svg");
+    out property <image> chevron-down: @image-url("icons/chevron-down.svg");
+    out property <image> chevron-up: @image-url("icons/chevron-up.svg");
+    out property <image> external-link: @image-url("icons/external-link.svg");
+
+    // The icon of a category id (0 images … 4 documents, else mixed).
+    public pure function category(id: int) -> image {
+        if (id == 0) { return image; }
+        if (id == 1) { return pdf; }
+        if (id == 2) { return video; }
+        if (id == 3) { return audio; }
+        if (id == 4) { return document; }
+        return mixed;
+    }
+}
+
+// A tinted icon: `Icon { source: Icons.gear; }`.
+export component Icon inherits Image {
+    width: 16px;
+    height: 16px;
+    colorize: Theme.text-primary;
+    image-fit: contain;
+    accessible-role: none;
+}

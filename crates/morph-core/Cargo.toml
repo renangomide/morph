@@ -1,0 +1,95 @@
+[package]
+name = "morph-core"
+description = "Morph job model, scheduler and converters (no UI)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+morph-formats = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+rayon = "1.12.0"
+crossbeam-channel = "0.5.17"
+tracing = "0.1.44"
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_SystemInformation",
+    # Office engines (M5): registry detection, COM/OLE Automation (IDispatch late
+    # binding), job objects + process snapshots to kill hung Office/LibreOffice.
+    "Win32_Globalization",
+    "Win32_System_Com",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_JobObjects",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+] }
+
+# Images (SPEC §7). Native decoders (HEIC/AVIF) are added by the image I/O work.
+image = "0.25.10"
+mozjpeg = "0.10.13"
+webp = "0.3.1"
+ravif = "0.13.0"
+resvg = "0.48.1"
+oxipng = { version = "10.2.1", default-features = false, features = ["parallel"] }
+imagequant = "4.4.1"
+fast_image_resize = { version = "6.1.0", features = ["image"] }
+kamadak-exif = "0.6.1"
+img-parts = "0.4.1"
+# XMP edits (GPS removal, orientation reset). Already in the tree via resvg/usvg.
+roxmltree = "0.21.1"
+ico = "0.6.0"
+# HEIC/HEIF + AVIF decoding: libheif (libde265, libaom) from vcpkg, linked statically
+# (triplet x64-windows-static; see vcpkg.json at the repo root).
+libheif-rs = "3.0.0"
+toml = "1.1.8"
+# Compress "Best (automatic)": SSIMULACRA2 "looks identical" check. Safe Rust, SIMD,
+# BSD-2-Clause (deps MIT/Apache).
+fast-ssim2 = { version = "~0.9.0", features = ["rayon"] }
+
+# PDF (SPEC §4.2, §7). pdfium-render binds to vendor\pdfium\pdfium.dll at run time
+# (scripts\fetch-deps.ps1 pins bblanchon/pdfium-binaries chromium/7881, which must match
+# the `pdfium_7881` feature). `thread_safe` serializes every PDFium call behind a mutex.
+# MIT OR Apache-2.0.
+pdfium-render = { version = "0.9.4", default-features = false, features = [
+    "pdfium_7881",
+    "thread_safe",
+    "image_025",
+] }
+# Low-level PDF object editing for Compress (rewrite image XObjects, prune, object
+# streams) and merge bookmarks (PDFium can't create outlines). MIT.
+lopdf = { version = "0.45.0", default-features = false, features = ["rayon"] }
+
+# Office documents (SPEC §4.5, §7).
+# CSV/XLSX native: calamine reads xlsx/xls/ods (MIT), rust_xlsxwriter writes xlsx
+# (MIT OR Apache-2.0), csv reads/writes CSV (Unlicense OR MIT).
+calamine = "0.37.0"
+rust_xlsxwriter = "0.100.0"
+csv = "1.4.0"
+# Markdown → HTML (CommonMark + tables), MIT.
+pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+# HTML → Markdown, Apache-2.0.
+htmd = "0.5.6"
+# Legacy text encodings (Windows-1252 .txt/.csv inputs). Already in the tree via lopdf.
+encoding_rs = "0.8.42"
+# Zip reading/writing: DOCX/XLSX/PPTX checks and the hand-built fixture generator. MIT.
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Two-way conversions (SPEC §4.6). Streaming XML reader for the native DOCX/PPTX
+# → Markdown readers (OOXML parts), MIT; already in the tree via calamine.
+quick-xml = "0.42.0"
+# `data:` images in HTML (pre-clean saves them into `name (images)/`),
+# MIT OR Apache-2.0; already in the tree via usvg.
+base64 = "0.23.1"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

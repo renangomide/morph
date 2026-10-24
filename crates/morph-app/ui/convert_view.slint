@@ -1,0 +1,2242 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Conversion window, options page (SPEC §3.2): `ConvertView`, shown by
+// main.slint when `page == 0`.
+// Data and callbacks: the `ConvertUi` global (Rust: `controller.rs`). Text:
+// the `Strings` global (Rust: `src/convert_text.rs`, `src/strings/mod.rs`).
+// No user-visible strings here.
+
+import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette, ScrollView, Slider, SpinBox } from "std-widgets.slint";
+import { Card, SubtleCard, SegmentedBar, FormatChip, FormatChipGrid, CategoryBadge, CategoryTabCard, IconButton, Pill, WarningBanner } from "widgets.slint";
+import { Theme } from "theme.slint";
+import { Icons, Icon } from "icons.slint";
+
+export struct FileRow {
+    name: string,
+    folder: string,
+    size: string,
+}
+
+// A file no tab takes, with the reason ("This file type isn't supported.").
+export struct SkippedFile {
+    name: string,
+    reason: string,
+}
+
+export struct FormatInfo {
+    label: string,
+    lossy: bool,
+    lossless-mode: bool,
+    alpha: bool,
+    default-quality: int,
+    is-ico: bool,
+    // "PDF" target: Image → PDF (page size, margin).
+    is-pdf: bool,
+}
+
+// One audio output format of the format box (Audio → Convert, Extract audio).
+export struct AudioFormatInfo {
+    label: string,
+    lossless: bool,
+    is-mp3: bool,
+    // "192 kbps", …; empty for lossless formats.
+    bitrates: [string],
+    default-bitrate: int,
+}
+
+export struct Toggle {
+    label: string,
+    checked: bool,
+}
+
+// One card of a mixed selection (`ConvertUi.categories`).
+export struct CategoryCard {
+    // Theme category id: 0 images, 1 PDF, 2 video, 3 audio, 4 documents.
+    category: int,
+    // "Images (10)".
+    label: string,
+    // What runs now: "→ WebP", "Compress", "→ PDF".
+    summary: string,
+    // false = skipped by choice.
+    included: bool,
+    // Accessible name of the checkbox: "Include Images".
+    include-label: string,
+}
+
+export global Strings {
+    in property <string> cancel;
+    in property <string> show-files;
+    in property <string> hide-files;
+    in property <string> remove-file;
+    in property <[string]> actions;
+    in property <string> format;
+    in property <string> quality;
+    in property <string> quality-default;
+    in property <string> quality-compress-hint;
+    in property <string> lossless;
+    in property <string> keep-metadata;
+    in property <string> remove-gps;
+    in property <string> background;
+    in property <[string]> backgrounds;
+    in property <string> ico-sizes;
+    in property <string> svg-width;
+    in property <string> compress-mode;
+    in property <string> compress-best;
+    in property <string> compress-best-hint;
+    in property <string> compress-by-quality;
+    in property <string> compress-by-size;
+    in property <string> target-at-most;
+    in property <[string]> units;
+    in property <string> convert-to-webp;
+    in property <string> png-lossy;
+    in property <string> resize-mode;
+    in property <[string]> resize-modes;
+    in property <string> percent;
+    in property <string> width;
+    in property <string> height;
+    in property <string> keep-aspect;
+    in property <string> no-enlarge;
+    in property <string> strip-label;
+    in property <[string]> strips;
+    in property <string> rotate;
+    in property <[string]> rotations;
+    in property <string> flip-h;
+    in property <string> flip-v;
+    in property <string> clean-rotate-note;
+    in property <string> pdf-compression;
+    in property <[string]> pdf-presets;
+    in property <[string]> pdf-preset-hints;
+    in property <string> pdf-max-dpi;
+    in property <string> pdf-compress-note;
+    in property <[string]> pdf-image-formats;
+    in property <string> pdf-dpi;
+    in property <[string]> pdf-dpis;
+    in property <string> pdf-dpi-value;
+    in property <string> pdf-pages;
+    in property <string> pdf-pages-placeholder;
+    in property <string> pdf-to-images-note;
+    in property <string> pdf-page-separators;
+    in property <string> pdf-to-text-note;
+    in property <string> pdf-split-mode;
+    in property <[string]> pdf-split-modes;
+    in property <string> pdf-split-every;
+    in property <string> pdf-split-ranges;
+    in property <string> pdf-split-ranges-placeholder;
+    in property <string> pdf-split-note;
+    in property <string> pdf-page-size;
+    in property <[string]> pdf-page-sizes;
+    in property <string> pdf-margin;
+    in property <string> pdf-bookmarks;
+    in property <string> pdf-merge-note;
+    in property <string> move-up;
+    in property <string> move-down;
+    in property <string> save-to;
+    in property <string> save-next-to;
+    in property <string> save-choose;
+    in property <string> save-browse;
+    in property <string> save-no-folder;
+    in property <string> remember;
+    in property <string> pdf-to-word-warning;
+    in property <string> pdf-to-word-note;
+    in property <[string]> office-actions;
+    in property <string> office-convert-to;
+    in property <[string]> office-image-formats;
+    in property <string> csv-delimiter;
+    in property <[string]> csv-delimiters;
+    in property <string> csv-delimiter-hint;
+    in property <string> csv-bom;
+    in property <string> office-convert-note;
+    in property <string> office-images-note;
+    in property <string> office-images-only;
+    in property <string> engine-missing;
+    in property <string> download-libreoffice;
+    in property <string> check-again;
+    in property <string> pdf-to-markdown-note;
+    in property <string> save-pictures;
+    in property <string> image-to-pdf-note;
+    in property <string> max-rows;
+    in property <string> slide-notes;
+    in property <[string]> video-actions;
+    in property <string> advanced-show;
+    in property <string> advanced-hide;
+    in property <[string]> video-containers;
+    in property <string> video-fast;
+    in property <string> video-fast-hint;
+    in property <string> video-codec;
+    in property <[string]> video-codecs;
+    in property <string> audio-codec;
+    in property <[string]> video-audio-codecs;
+    in property <string> video-quality;
+    in property <[string]> video-qualities;
+    in property <string> video-encoder;
+    in property <[string]> video-encoders;
+    in property <string> video-convert-note;
+    in property <string> video-preset;
+    in property <[string]> video-presets;
+    in property <[string]> video-preset-hints;
+    in property <string> video-target-mb;
+    in property <string> video-resolution;
+    in property <[string]> video-resolutions;
+    in property <string> video-resolution-hint;
+    in property <string> extract-audio-note;
+    in property <string> gif-start;
+    in property <string> gif-start-placeholder;
+    in property <string> gif-length;
+    in property <string> gif-width;
+    in property <[string]> gif-widths;
+    in property <string> gif-fps;
+    in property <[string]> gif-fps-choices;
+    in property <string> gif-note;
+    in property <string> audio-bitrate;
+    in property <string> mp3-mode;
+    in property <[string]> mp3-modes;
+    in property <string> sample-rate;
+    in property <[string]> sample-rates;
+    in property <string> channels;
+    in property <[string]> channel-choices;
+    in property <string> keep-tags;
+    in property <string> audio-convert-note;
+    in property <string> lossless-warning;
+    in property <string> ffmpeg-missing;
+    in property <string> settings;
+    // ── M9 ──
+    in property <string> merge-order-hint;
+    // Convert | Compress | Split | Merge.
+    in property <[string]> pdf-tabs;
+    in property <string> pdf-convert-to;
+    // Word, Markdown, HTML, Images, Plain text.
+    in property <[string]> pdf-convert-chips;
+    in property <[string]> pdf-preset-descs;
+    in property <[string]> compress-mode-descs;
+    in property <string> chip-pdf;
+    in property <string> chip-ico;
+}
+
+// Everything the options page shows and edits (Rust: `controller.rs`).
+export global ConvertUi {
+    // ── Options page ──
+    in property <[FileRow]> files;
+    in-out property <bool> files-open;
+    in property <string> skip-note;
+    // Mixed selection: one tab per type ("Images (3)"); empty = single type.
+    in property <[string]> type-tabs;
+    in-out property <int> type-tab;
+    // "Show files": files that won't run, with the reason (no ✕).
+    in property <[SkippedFile]> skipped;
+    in property <string> skipped-heading;
+    in property <bool> has-svg;
+    in property <string> convert-label;
+    in property <bool> convert-enabled: true;
+    in-out property <string> form-error;
+
+    in property <[FormatInfo]> formats;
+    in-out property <int> kind;
+    in-out property <int> format;
+    in-out property <float> quality: 80;
+    in-out property <bool> quality-custom;
+    in-out property <bool> lossless;
+    in-out property <int> background-choice;
+    in-out property <[Toggle]> ico-sizes;
+    in-out property <int> svg-width: 1024;
+    in-out property <bool> convert-keep-metadata: true;
+    in-out property <bool> convert-remove-gps;
+    in-out property <int> image-pdf-page-size;
+    in-out property <int> image-pdf-margin: 0;
+
+    in-out property <int> compress-mode;
+    in-out property <float> compress-quality: 80;
+    in-out property <bool> compress-quality-custom;
+    in-out property <string> target-value;
+    in-out property <int> target-unit;
+    in-out property <bool> convert-to-webp;
+    in-out property <bool> png-lossy;
+    in-out property <bool> compress-keep-metadata: true;
+    in-out property <bool> compress-remove-gps;
+
+    in-out property <int> resize-mode;
+    in-out property <int> percent: 50;
+    in-out property <int> resize-width: 1920;
+    in-out property <int> resize-height: 1080;
+    in-out property <bool> keep-aspect: true;
+    in-out property <bool> no-enlarge: true;
+    in-out property <bool> resize-keep-metadata: true;
+    in-out property <bool> resize-remove-gps;
+
+    in-out property <int> strip;
+    in-out property <int> rotate;
+    in-out property <bool> flip-horizontal;
+    in-out property <bool> flip-vertical;
+
+    // 0 = image panels (`kind`), 1 = PDF panels (`pdf-kind`).
+    in property <int> category;
+    in-out property <int> pdf-kind;
+    in-out property <int> pdf-preset: 1;
+    in-out property <int> pdf-compress-dpi: 150;
+    in-out property <float> pdf-compress-quality: 75;
+    in-out property <int> pdf-image-format;
+    in-out property <int> pdf-dpi-choice: 1;
+    in-out property <int> pdf-dpi-custom: 150;
+    in-out property <string> pdf-pages;
+    in-out property <bool> pdf-page-separators;
+    in-out property <int> pdf-markup-format;
+    in-out property <bool> pdf-markup-images: true;
+    in-out property <int> pdf-split-mode;
+    in-out property <int> pdf-split-every: 2;
+    in-out property <string> pdf-split-ranges;
+    in-out property <int> pdf-page-size;
+    in-out property <int> pdf-margin: 0;
+    in-out property <bool> pdf-bookmarks: true;
+    // 2 = Office / text document panels (`office-kind`).
+    in-out property <int> office-kind;
+    // Target formats for the selected files, short ("DOCX", "PDF"), for
+    // the format chips, and the chosen index.
+    in property <[string]> office-target-short;
+    in-out property <int> office-format;
+    // Index of CSV in `office-targets` (-1 = not offered).
+    in property <int> office-csv-target: -1;
+    // A CSV file is selected (the separator is used to read it).
+    in property <bool> office-csv-input;
+    // A document or presentation is selected (Export as images).
+    in property <bool> office-has-images: true;
+    in-out property <int> office-delimiter;
+    in-out property <bool> office-csv-bom: true;
+    // Index of Markdown in `office-targets` (-1 = not offered), and which
+    // Markdown options apply to the selected files.
+    in property <int> office-md-target: -1;
+    in property <bool> office-md-pictures;
+    in property <bool> office-md-sheets;
+    in property <bool> office-md-slides;
+    in-out property <bool> office-images: true;
+    in-out property <int> office-max-rows: 0;
+    in-out property <bool> office-slide-notes: true;
+    in-out property <int> office-image-format;
+    in-out property <int> office-dpi-choice: 1;
+    in-out property <int> office-dpi-custom: 150;
+    // Missing Office engine banner (SPEC §3.2), with a note when some files
+    // still convert, and "Using LibreOffice" when an engine will run.
+    in property <bool> engine-missing;
+    in property <string> engine-missing-note;
+    in property <string> engine-line;
+    // 3 = video / audio panels: `media-tab` 0 = video (`video-kind`), 1 = audio.
+    in-out property <int> media-tab;
+    // Both videos and audio files are selected: show the two tabs.
+    in property <bool> media-tabs-visible;
+    in property <[string]> media-tab-labels;
+    in-out property <int> video-kind;
+    in-out property <bool> media-advanced;
+    in-out property <int> video-container;
+    in-out property <bool> video-fast: true;
+    in-out property <int> video-codec;
+    in-out property <int> video-audio-codec;
+    in-out property <int> video-quality: 1;
+    in-out property <int> video-convert-encoder;
+    in-out property <int> video-preset;
+    in-out property <string> video-target-mb;
+    in-out property <int> video-resolution;
+    in-out property <int> video-compress-encoder;
+    in property <[AudioFormatInfo]> extract-formats;
+    in property <[string]> extract-format-labels;
+    in-out property <int> extract-format;
+    in-out property <int> extract-bitrate;
+    in-out property <int> extract-mp3-mode;
+    in-out property <int> extract-sample-rate;
+    in-out property <int> extract-channels;
+    in-out property <bool> extract-keep-tags: true;
+    in property <[AudioFormatInfo]> audio-formats;
+    in property <[string]> audio-format-labels;
+    in-out property <int> audio-format;
+    in-out property <int> audio-bitrate;
+    in-out property <int> audio-mp3-mode;
+    in-out property <int> audio-sample-rate;
+    in-out property <int> audio-channels;
+    in-out property <bool> audio-keep-tags: true;
+    in property <bool> audio-lossy-input;
+    in-out property <string> gif-start;
+    in-out property <int> gif-length: 10;
+    in-out property <int> gif-width;
+    in-out property <int> gif-fps;
+    // FFmpeg isn't installed next to Morph: banner, Convert disabled.
+    in property <bool> ffmpeg-missing;
+    // Merge: "Show files" can be reordered.
+
+    in-out property <bool> use-folder;
+    in property <string> folder-text;
+    in-out property <bool> remember: true;
+
+    // ── M9 additions (foundation) ──
+    // Summary header, split: "12 files", "48.3 MB", "Images batch ready" /
+    // "3 categories selected", and the badge (Theme category id; 5 = mixed).
+    in property <string> header-count;
+    in property <string> header-size;
+    in property <string> header-subtitle;
+    in property <int> header-category;
+    // Mixed selection: one card per type tab (same order as `type-tabs`).
+    in property <[CategoryCard]> categories;
+    // PDFs in the selection (the Merge tab needs two).
+    in property <int> pdf-count;
+
+    callback remove-file(int);
+    // Move the file at the first index to the second (Merge order).
+    callback move-file(int, int);
+    // The action selector changed (Convert button label / skip note).
+    callback action-changed();
+    // Mixed selection: `type-tab` changed (show that type's panels).
+    callback type-tab-changed();
+    // Mixed selection: include (true) or skip (false) the type of card `index`.
+    // Skipped types don't run and are listed under Skipped ("You chose to skip …").
+    callback category-included(int, bool);
+    // Live page-range checks: "" = fine, else the message to show.
+    pure callback validate-pages(string) -> string;
+    pure callback validate-split-ranges(string) -> string;
+    pure callback validate-time(string) -> string;
+    // Missing engine banner buttons. "Check again" looks for Office,
+    // LibreOffice and FFmpeg again (same check as Settings).
+    callback download-engine();
+    callback check-engines();
+    callback choose-folder();
+    callback select-folder();
+    callback convert();
+    callback cancel();
+    // Gear button: Settings in this window (page 4); its Back returns here
+    // with the selection and options unchanged.
+    callback open-settings();
+}
+
+// ── Local building blocks (only this view uses them) ──
+
+// The body of the options card.
+component Panel {
+    VerticalLayout {
+        spacing: Theme.space-m;
+        alignment: start;
+        @children
+    }
+}
+
+// Width of the options card's content, for wrapped text (see `Hint`).
+global Fit {
+    in-out property <length> text-width: 400px;
+}
+
+// Muted helper text under a group of options.
+// Slint 1.18 measures the height of an `if` element at its *preferred* width;
+// a wrapped text's preferred width is its unwrapped length, so it would count
+// as one line and get clipped. Its preferred width is the real width instead.
+component Hint inherits Text {
+    font-size: Theme.font-caption;
+    color: Theme.text-muted;
+    wrap: word-wrap;
+    preferred-width: Fit.text-width;
+}
+
+// Inline validation message.
+component ErrorText inherits Hint {
+    color: Theme.error-text;
+}
+
+// Small muted heading above a chip grid ("Format", "Compression").
+component SectionLabel inherits Text {
+    font-size: Theme.font-caption;
+    font-weight: Theme.weight-semibold;
+    color: Theme.text-muted;
+    overflow: elide;
+}
+
+// Thin line between groups inside a card.
+component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border-subtle;
+}
+
+// "Label ........ control" row.
+component LabeledRow inherits HorizontalLayout {
+    in property <string> label;
+    spacing: Theme.space-m;
+    Text {
+        text: root.label;
+        width: 140px;
+        font-size: Theme.font-caption + 1px;
+        color: Theme.text-secondary;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    @children
+}
+
+// Label on the left, a fixed-width chip row on the right.
+component ChipRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <[string]> items;
+    in property <int> current;
+    in property <length> chips-width: 260px;
+    callback selected(int);
+    spacing: Theme.space-m;
+    Text {
+        horizontal-stretch: 1;
+        text: root.label;
+        font-size: Theme.font-caption + 1px;
+        color: Theme.text-secondary;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    VerticalLayout {
+        alignment: center;
+        FormatChipGrid {
+            width: root.chips-width;
+            items: root.items;
+            columns: root.items.length;
+            current: root.current;
+            chip-height: 30px;
+            selected(i) => {
+                root.selected(i);
+            }
+        }
+    }
+}
+
+// "Show advanced options" link-style toggle.
+component Expander {
+    in-out property <bool> open;
+    min-height: 28px;
+    accessible-role: button;
+    accessible-label: root.open ? Strings.advanced-hide : Strings.advanced-show;
+    accessible-expanded: root.open;
+    accessible-action-default => {
+        root.open = !root.open;
+    }
+    forward-focus: fs;
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.open = !root.open;
+                return accept;
+            }
+            reject
+        }
+        ta := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                fs.focus();
+                root.open = !root.open;
+            }
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: 6px;
+            padding-left: 2px;
+            padding-right: 4px;
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    source: root.open ? Icons.chevron-up : Icons.chevron-down;
+                    width: 14px;
+                    height: 14px;
+                    colorize: Theme.accent-text;
+                }
+            }
+            Text {
+                text: root.open ? Strings.advanced-hide : Strings.advanced-show;
+                font-size: Theme.font-caption + 1px;
+                color: Theme.accent-text;
+                vertical-alignment: center;
+                font-weight: ta.has-hover ? Theme.weight-semibold : Theme.weight-regular;
+            }
+        }
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: 4px;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// A two-line selectable card (compression mode, PDF preset).
+component OptionCard {
+    in property <string> title;
+    in property <string> description;
+    in property <bool> checked;
+    callback clicked();
+
+    accessible-role: button;
+    accessible-label: root.title;
+    accessible-description: root.description;
+    accessible-checked: root.checked;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: fs;
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            // Space selects; Enter stays the window's Convert.
+            if (event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+        ta := TouchArea {
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
+        Rectangle {
+            border-radius: Theme.radius-chip;
+            border-width: 1px;
+            border-color: root.checked ? Theme.accent : ta.has-hover ? Theme.border-chip-hover : Theme.border-chip;
+            background: root.checked ? Theme.accent-tint : Theme.surface-input;
+            animate border-color, background { duration: Theme.motion-fast; }
+        }
+        VerticalLayout {
+            padding-left: 10px;
+            padding-right: 10px;
+            alignment: center;
+            spacing: 1px;
+            Text {
+                text: root.title;
+                font-size: Theme.font-caption + 1px;
+                font-weight: Theme.weight-semibold;
+                color: root.checked ? Theme.accent-text : Theme.text-primary;
+                overflow: elide;
+            }
+            Text {
+                text: root.description;
+                font-size: Theme.font-caption;
+                color: Theme.text-muted;
+                overflow: elide;
+            }
+        }
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-chip;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// OptionCards in a grid of `columns` equal columns (single select).
+component OptionGrid {
+    in property <[string]> items;
+    in property <[string]> descriptions;
+    in property <int> current;
+    in property <int> columns: 3;
+    in property <length> card-height: 52px;
+    in property <length> gap: 6px;
+    callback selected(int);
+
+    property <int> rows: ceil(root.items.length / max(1, root.columns));
+    property <length> card-width: (root.width - (root.columns - 1) * root.gap) / max(1, root.columns);
+    height: root.rows * root.card-height + max(0, root.rows - 1) * root.gap;
+    accessible-role: list;
+
+    for item[i] in root.items: OptionCard {
+        x: Math.mod(i, root.columns) * (root.card-width + root.gap);
+        y: floor(i / root.columns) * (root.card-height + root.gap);
+        width: root.card-width;
+        height: root.card-height;
+        title: item;
+        description: root.descriptions[i];
+        checked: i == root.current;
+        clicked => {
+            root.selected(i);
+        }
+    }
+}
+
+// Image Convert target chips: the format list, with short names for the
+// long ones ("ICO (icon)" → ICO, "PDF (one per image)" → PDF).
+component ImageFormatGrid {
+    in property <[FormatInfo]> formats;
+    in property <int> current;
+    in property <int> columns: 5;
+    in property <length> chip-height: 34px;
+    in property <length> gap: 6px;
+    callback selected(int);
+
+    property <int> rows: ceil(root.formats.length / max(1, root.columns));
+    property <length> chip-width: (root.width - (root.columns - 1) * root.gap) / max(1, root.columns);
+    height: root.rows * root.chip-height + max(0, root.rows - 1) * root.gap;
+    accessible-role: list;
+
+    for f[i] in root.formats: FormatChip {
+        x: Math.mod(i, root.columns) * (root.chip-width + root.gap);
+        y: floor(i / root.columns) * (root.chip-height + root.gap);
+        width: root.chip-width;
+        height: root.chip-height;
+        text: f.is-pdf ? Strings.chip-pdf : f.is-ico ? Strings.chip-ico : f.label;
+        checked: i == root.current;
+        clicked => {
+            root.selected(i);
+        }
+    }
+}
+
+// Secondary button with a trailing chevron ("Show files ▾").
+component DrawerToggle {
+    in property <string> text;
+    in property <bool> open;
+    callback clicked();
+
+    min-height: 32px;
+    min-width: label.preferred-width + 46px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-expanded: root.open;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: fs;
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+        ta := TouchArea {
+            clicked => {
+                fs.focus();
+                root.clicked();
+            }
+        }
+        Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: Theme.border-input;
+            background: ta.pressed ? Theme.surface-pressed : ta.has-hover ? Theme.surface-hover : Theme.surface-input;
+        }
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 10px;
+            spacing: 6px;
+            label := Text {
+                text: root.text;
+                font-size: Theme.font-caption + 1px;
+                color: Theme.text-primary;
+                vertical-alignment: center;
+            }
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    source: root.open ? Icons.chevron-up : Icons.chevron-down;
+                    width: 14px;
+                    height: 14px;
+                    colorize: Theme.text-secondary;
+                }
+            }
+        }
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-control;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+// Audio options shared by Audio → Convert and Video → Extract audio.
+component AudioOptions inherits Panel {
+    in property <[AudioFormatInfo]> formats;
+    in property <[string]> format-labels;
+    in-out property <int> format;
+    in-out property <int> bitrate;
+    in-out property <int> mp3-mode;
+    in-out property <int> sample-rate;
+    in-out property <int> channels;
+    in-out property <bool> keep-tags;
+    in-out property <bool> advanced;
+    // A lossy file is selected (warn about lossless targets).
+    in property <bool> lossy-input;
+    property <AudioFormatInfo> info: root.formats[root.format];
+
+    SectionLabel {
+        text: Strings.format;
+    }
+    FormatChipGrid {
+        items: root.format-labels;
+        current: root.format;
+        columns: 3;
+        selected(i) => {
+            root.format = i;
+            root.bitrate = root.formats[i].default-bitrate;
+        }
+    }
+    if root.info.lossless && root.lossy-input: ErrorText {
+        text: Strings.lossless-warning;
+    }
+    Divider { }
+    if root.info.is-mp3: LabeledRow {
+        label: Strings.mp3-mode;
+        ComboBox {
+            horizontal-stretch: 1;
+            model: Strings.mp3-modes;
+            current-index <=> root.mp3-mode;
+        }
+    }
+    if !root.info.lossless && !(root.info.is-mp3 && root.mp3-mode != 0): LabeledRow {
+        label: Strings.audio-bitrate;
+        ComboBox {
+            horizontal-stretch: 1;
+            model: root.info.bitrates;
+            current-index <=> root.bitrate;
+        }
+    }
+    CheckBox {
+        text: Strings.keep-tags;
+        checked <=> root.keep-tags;
+    }
+    Expander {
+        open <=> root.advanced;
+    }
+    if root.advanced: LabeledRow {
+        label: Strings.sample-rate;
+        ComboBox {
+            horizontal-stretch: 1;
+            model: Strings.sample-rates;
+            current-index <=> root.sample-rate;
+        }
+    }
+    if root.advanced: LabeledRow {
+        label: Strings.channels;
+        ComboBox {
+            horizontal-stretch: 1;
+            model: Strings.channel-choices;
+            current-index <=> root.channels;
+        }
+    }
+    @children
+}
+
+// One file of the drawer. With `reorderable` (Merge), the grip drags the row
+// to a new place (the drop target gets an accent line) and ↑ / ↓ move it one
+// step, for the keyboard and long lists.
+component FileListRow inherits Rectangle {
+    in property <FileRow> file;
+    in property <int> index;
+    in property <int> count;
+    in property <bool> reorderable;
+    in property <length> row-height: 40px;
+    // Row being dragged and where it would land (-1 = no drag).
+    in property <int> drag-from: -1;
+    in property <int> drag-to: -1;
+    callback remove();
+    // Dragged `rows` rows away from where the drag started.
+    callback drag-moved(int);
+    // `true` = released (move the row), `false` = cancelled (don't).
+    callback drag-ended(bool);
+    callback move-by(int);
+
+    height: root.row-height;
+    border-radius: Theme.radius-control;
+    background: root.drag-from == root.index ? Theme.surface-hover : hover.has-hover ? Theme.surface-hover : transparent;
+
+    hover := TouchArea { }
+
+    if root.drag-from >= 0 && root.drag-to == root.index && root.drag-from != root.index: Rectangle {
+        x: 0;
+        y: root.drag-to < root.drag-from ? 0 : parent.height - 3px;
+        width: parent.width;
+        height: 3px;
+        background: Theme.accent;
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 2px;
+        spacing: 6px;
+        if root.reorderable: Rectangle {
+            width: 18px;
+            accessible-role: none;
+            Icon {
+                source: Icons.grip;
+                width: 16px;
+                height: 16px;
+                colorize: Theme.text-secondary;
+                opacity: handle.has-hover || handle.pressed ? 1 : 0.7;
+            }
+            handle := TouchArea {
+                mouse-cursor: move;
+                moved => {
+                    root.drag-moved(round((self.mouse-y - self.pressed-y) / root.row-height));
+                }
+                pointer-event(event) => {
+                    // Released: move the row. Cancelled (e.g. focus lost): leave it.
+                    if (event.kind == PointerEventKind.up) {
+                        root.drag-ended(true);
+                    } else if (event.kind == PointerEventKind.cancel) {
+                        root.drag-ended(false);
+                    }
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.file.name;
+                font-size: Theme.font-caption + 1px;
+                font-weight: Theme.weight-semibold;
+                color: Theme.text-primary;
+                overflow: elide;
+            }
+            Text {
+                text: root.file.folder;
+                font-size: Theme.font-caption - 1px;
+                color: Theme.text-muted;
+                overflow: elide;
+            }
+        }
+        Text {
+            text: root.file.size;
+            font-size: Theme.font-caption;
+            color: Theme.text-muted;
+            vertical-alignment: center;
+        }
+        if root.reorderable: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.arrow-up;
+                label: Strings.move-up;
+                enabled: root.index > 0;
+                width: 28px;
+                height: 28px;
+                icon-size: 14px;
+                clicked => {
+                    root.move-by(-1);
+                }
+            }
+        }
+        if root.reorderable: VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.arrow-down;
+                label: Strings.move-down;
+                enabled: root.index < root.count - 1;
+                width: 28px;
+                height: 28px;
+                icon-size: 14px;
+                clicked => {
+                    root.move-by(1);
+                }
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: Icons.close;
+                label: Strings.remove-file;
+                width: 28px;
+                height: 28px;
+                icon-size: 14px;
+                tint: Theme.text-secondary;
+                clicked => {
+                    root.remove();
+                }
+            }
+        }
+    }
+}
+
+export component ConvertView {
+    property <string> gif-start-error: ConvertUi.validate-time(ConvertUi.gif-start);
+    property <bool> show-csv-options: ConvertUi.office-csv-input || ConvertUi.office-format == ConvertUi.office-csv-target;
+    property <bool> reorderable: ConvertUi.category == 1 && ConvertUi.pdf-kind == 6 && ConvertUi.type-tabs.length == 0;
+    property <int> drag-from: -1;
+    property <int> drag-to: -1;
+    property <string> pages-error: ConvertUi.validate-pages(ConvertUi.pdf-pages);
+    property <string> split-ranges-error: ConvertUi.validate-split-ranges(ConvertUi.pdf-split-ranges);
+    property <FormatInfo> image-format: ConvertUi.formats[ConvertUi.format];
+
+    // ── PDF tabs (pure UI over `pdf-kind`) ──
+    // Tab: 0 Convert (kinds 1–4), 1 Compress (0), 2 Split (5), 3 Merge (6).
+    property <int> pdf-tab: ConvertUi.pdf-kind == 0 ? 1 : ConvertUi.pdf-kind == 5 ? 2 : ConvertUi.pdf-kind == 6 ? 3 : 0;
+    // Convert chip: 0 Word (2), 1 Markdown (3+0), 2 HTML (3+1), 3 Images (1), 4 Text (4).
+    property <int> pdf-chip: ConvertUi.pdf-kind == 2 ? 0 : ConvertUi.pdf-kind == 3 ? (ConvertUi.pdf-markup-format == 0 ? 1 : 2) : ConvertUi.pdf-kind == 1 ? 3 : ConvertUi.pdf-kind == 4 ? 4 : -1;
+    // The chip the Convert tab comes back to (Markdown: no engine needed).
+    property <int> last-pdf-chip: 1;
+    property <bool> merge-offered: ConvertUi.pdf-count >= 2 || ConvertUi.pdf-kind == 6;
+    // Documents: "Export as images" only when a document or presentation is selected.
+    property <bool> office-images-offered: ConvertUi.office-has-images || ConvertUi.office-kind == 1;
+    // Mixed cards: one row up to 4, else rows of 3.
+    property <int> card-columns: ConvertUi.categories.length <= 4 ? ConvertUi.categories.length : 3;
+    // Room the file drawer may take: the window minus the header, the
+    // category cards, the action bar, the footer and ~100 px of options, so
+    // the footer never gets pushed out of a short window (mixed selection +
+    // Skipped list at 640 px).
+    property <int> card-rows: ceil(ConvertUi.categories.length / max(1, root.card-columns));
+    property <length> drawer-room: max(100px, root.height - 2 * Theme.window-padding - header-card.preferred-height - footer-card.preferred-height
+        - (ConvertUi.categories.length > 0 ? root.card-rows * 62px + Theme.space-m : 0px)
+        - 36px - 5 * Theme.space-m - 100px);
+    property <length> skipped-list-height: min(80px, ConvertUi.skipped.length * 38px, max(38px, root.drawer-room / 2));
+
+    // Card content width (card padding on both sides), for `Hint`.
+    property <length> text-width: scroll.width - 2 * Theme.space-l;
+    changed text-width => {
+        Fit.text-width = self.text-width;
+    }
+
+    init => {
+        Fit.text-width = self.text-width;
+        if (root.pdf-chip >= 0) {
+            root.last-pdf-chip = root.pdf-chip;
+        }
+    }
+
+    function set-pdf-chip(chip: int) {
+        if (chip == 0) {
+            ConvertUi.pdf-kind = 2;
+        } else if (chip == 1) {
+            ConvertUi.pdf-kind = 3;
+            ConvertUi.pdf-markup-format = 0;
+        } else if (chip == 2) {
+            ConvertUi.pdf-kind = 3;
+            ConvertUi.pdf-markup-format = 1;
+        } else if (chip == 3) {
+            ConvertUi.pdf-kind = 1;
+        } else {
+            ConvertUi.pdf-kind = 4;
+        }
+        root.last-pdf-chip = chip;
+        ConvertUi.form-error = "";
+        ConvertUi.action-changed();
+    }
+
+    function set-pdf-tab(tab: int) {
+        if (tab == 0) {
+            if (root.pdf-chip < 0) {
+                root.set-pdf-chip(root.last-pdf-chip);
+            }
+            return;
+        }
+        ConvertUi.pdf-kind = tab == 1 ? 0 : tab == 2 ? 5 : 6;
+        if (tab == 3) {
+            // Merge: the order matters, show it.
+            ConvertUi.files-open = true;
+        }
+        ConvertUi.form-error = "";
+        ConvertUi.action-changed();
+    }
+
+    VerticalLayout {
+        padding: Theme.window-padding;
+        spacing: Theme.space-m;
+
+        // ── 1. Summary header ──
+        header-card := Card {
+            inner-padding: Theme.space-m;
+            HorizontalLayout {
+                spacing: Theme.space-m;
+                VerticalLayout {
+                    alignment: center;
+                    CategoryBadge {
+                        category: ConvertUi.header-category;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    HorizontalLayout {
+                        spacing: Theme.space-s;
+                        alignment: start;
+                        Text {
+                            text: ConvertUi.header-count;
+                            font-size: Theme.font-body-large;
+                            font-weight: Theme.weight-semibold;
+                            color: Theme.text-primary;
+                            vertical-alignment: center;
+                        }
+                        if ConvertUi.header-size != "": VerticalLayout {
+                            alignment: center;
+                            Pill {
+                                text: ConvertUi.header-size;
+                                text-color: Theme.text-muted;
+                            }
+                        }
+                    }
+                    Text {
+                        text: ConvertUi.header-subtitle;
+                        font-size: Theme.font-caption;
+                        color: Theme.text-muted;
+                        overflow: elide;
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    DrawerToggle {
+                        text: ConvertUi.files-open ? Strings.hide-files : Strings.show-files;
+                        open: ConvertUi.files-open;
+                        clicked => {
+                            ConvertUi.files-open = !ConvertUi.files-open;
+                        }
+                    }
+                }
+                // Settings in this window; Back returns here unchanged.
+                VerticalLayout {
+                    alignment: center;
+                    IconButton {
+                        icon: Icons.gear;
+                        label: Strings.settings;
+                        tint: Theme.text-secondary;
+                        clicked => {
+                            ConvertUi.open-settings();
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── File drawer ──
+        if ConvertUi.files-open: SubtleCard {
+            vertical-stretch: 0;
+            inner-padding: 6px;
+            inner-spacing: 4px;
+            if root.reorderable: Hint {
+                text: Strings.merge-order-hint;
+            }
+            if ConvertUi.files.length > 0: ListView {
+                // Leaves room for the Skipped list and the options at 640 px.
+                height: min(root.reorderable ? 200px : ConvertUi.skipped.length > 0 ? 124px : 164px, max(40px, ConvertUi.files.length * 40px),
+                    max(40px, root.drawer-room - (ConvertUi.skipped.length > 0 ? root.skipped-list-height + 24px : 0px) - (root.reorderable ? 24px : 0px)));
+                for file[i] in ConvertUi.files: FileListRow {
+                    file: file;
+                    index: i;
+                    count: ConvertUi.files.length;
+                    reorderable: root.reorderable;
+                    drag-from: root.drag-from;
+                    drag-to: root.drag-to;
+                    remove => {
+                        ConvertUi.remove-file(i);
+                    }
+                    drag-moved(rows) => {
+                        root.drag-from = i;
+                        root.drag-to = max(0, min(ConvertUi.files.length - 1, i + rows));
+                    }
+                    drag-ended(commit) => {
+                        if (commit && root.drag-from >= 0 && root.drag-to >= 0 && root.drag-from != root.drag-to) {
+                            ConvertUi.move-file(root.drag-from, root.drag-to);
+                        }
+                        root.drag-from = -1;
+                        root.drag-to = -1;
+                    }
+                    move-by(step) => {
+                        ConvertUi.move-file(i, i + step);
+                    }
+                }
+            }
+            if ConvertUi.skipped.length > 0: VerticalLayout {
+                padding-left: 8px;
+                padding-top: 4px;
+                SectionLabel {
+                    text: ConvertUi.skipped-heading;
+                }
+            }
+            if ConvertUi.skipped.length > 0: ListView {
+                height: root.skipped-list-height;
+                for item in ConvertUi.skipped: HorizontalLayout {
+                    height: 38px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 8px;
+                    VerticalLayout {
+                        alignment: center;
+                        Icon {
+                            source: Icons.info;
+                            width: 14px;
+                            height: 14px;
+                            colorize: Theme.text-muted;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: item.name;
+                            font-size: Theme.font-caption + 1px;
+                            color: Theme.text-primary;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: item.reason;
+                            font-size: Theme.font-caption - 1px;
+                            color: Theme.text-muted;
+                            overflow: elide;
+                        }
+                    }
+                }
+            }
+        }
+
+        // The Skipped list (files open) says the same, with the reasons.
+        if ConvertUi.skip-note != "" && !(ConvertUi.files-open && ConvertUi.skipped.length > 0): HorizontalLayout {
+            spacing: Theme.space-s;
+            padding-left: 4px;
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    source: Icons.info;
+                    width: 14px;
+                    height: 14px;
+                    colorize: Theme.text-muted;
+                }
+            }
+            Hint {
+                horizontal-stretch: 1;
+                text: ConvertUi.skip-note;
+                vertical-alignment: center;
+            }
+        }
+
+        // ── 2. Mixed selection: one card per type (count, summary, include) ──
+        if ConvertUi.categories.length > 0: Rectangle {
+            property <int> rows: ceil(ConvertUi.categories.length / max(1, root.card-columns));
+            property <length> card-width: (self.width - (root.card-columns - 1) * 6px) / max(1, root.card-columns);
+            height: self.rows * 56px + (self.rows - 1) * 6px;
+            accessible-role: tab-list;
+            for card[i] in ConvertUi.categories: CategoryTabCard {
+                x: Math.mod(i, root.card-columns) * (parent.card-width + 6px);
+                y: floor(i / root.card-columns) * 62px;
+                width: parent.card-width;
+                height: 56px;
+                min-width: 0;
+                category: card.category;
+                label: card.label;
+                summary: card.summary;
+                included: card.included;
+                include-label: card.include-label;
+                selected: ConvertUi.type-tab == i;
+                clicked => {
+                    ConvertUi.type-tab = i;
+                    ConvertUi.form-error = "";
+                    ConvertUi.type-tab-changed();
+                }
+                include-toggled(on) => {
+                    ConvertUi.category-included(i, on);
+                }
+            }
+        }
+
+        // Video + audio selection (not mixed): one chip per type, one Convert for both.
+        if ConvertUi.category == 3 && ConvertUi.media-tabs-visible && ConvertUi.type-tabs.length == 0: FormatChipGrid {
+            items: ConvertUi.media-tab-labels;
+            columns: 2;
+            current: ConvertUi.media-tab;
+            selected(i) => {
+                ConvertUi.media-tab = i;
+                ConvertUi.form-error = "";
+            }
+        }
+
+        // ── 3. Segmented action bar ──
+        if ConvertUi.category == 0: SegmentedBar {
+            items: Strings.actions;
+            current: ConvertUi.kind;
+            selected(i) => {
+                ConvertUi.kind = i;
+                ConvertUi.form-error = "";
+                ConvertUi.action-changed();
+            }
+        }
+        if ConvertUi.category == 1: SegmentedBar {
+            items: root.merge-offered ? Strings.pdf-tabs : [Strings.pdf-tabs[0], Strings.pdf-tabs[1], Strings.pdf-tabs[2]];
+            current: root.pdf-tab;
+            selected(i) => {
+                root.set-pdf-tab(i);
+            }
+        }
+        if ConvertUi.category == 2 && root.office-images-offered: SegmentedBar {
+            items: Strings.office-actions;
+            current: ConvertUi.office-kind;
+            selected(i) => {
+                ConvertUi.office-kind = i;
+                ConvertUi.form-error = "";
+                ConvertUi.action-changed();
+            }
+        }
+        if ConvertUi.category == 3 && ConvertUi.media-tab == 0: SegmentedBar {
+            items: Strings.video-actions;
+            current: ConvertUi.video-kind;
+            selected(i) => {
+                ConvertUi.video-kind = i;
+                ConvertUi.form-error = "";
+                ConvertUi.action-changed();
+            }
+        }
+
+        scroll := ScrollView {
+            vertical-stretch: 1;
+            // Slint 1.18 measures `preferred-height` at an unconstrained width (a
+            // wrapped hint counts as one line), so the content gets room to spare
+            // and the scroll height is where the options card really ends.
+            content-width: self.width;
+            content-height: options-card.y + options-card.height;
+            VerticalLayout {
+                x: 0;
+                y: 0;
+                width: scroll.width;
+                height: 4000px;
+                spacing: Theme.space-m;
+                alignment: start;
+
+                // Missing Office engine (SPEC §3.2).
+                if ConvertUi.engine-missing: WarningBanner {
+                    vertical-stretch: 0;
+                    title: Strings.engine-missing;
+                    text: ConvertUi.engine-missing-note;
+                    Button {
+                        text: Strings.download-libreoffice;
+                        primary: true;
+                        clicked => {
+                            ConvertUi.download-engine();
+                        }
+                    }
+                    Button {
+                        text: Strings.check-again;
+                        clicked => {
+                            ConvertUi.check-engines();
+                        }
+                    }
+                }
+
+                if ConvertUi.category == 3 && ConvertUi.ffmpeg-missing: WarningBanner {
+                    vertical-stretch: 0;
+                    title: Strings.ffmpeg-missing;
+                    text: "";
+                    Button {
+                        text: Strings.check-again;
+                        clicked => {
+                            ConvertUi.check-engines();
+                        }
+                    }
+                }
+
+                // ── Elevated options card ──
+                options-card := Card {
+                    vertical-stretch: 0;
+                    // Images: Convert
+                    if ConvertUi.category == 0 && ConvertUi.kind == 0: Panel {
+                        SectionLabel {
+                            text: Strings.format;
+                        }
+                        ImageFormatGrid {
+                            formats: ConvertUi.formats;
+                            current: ConvertUi.format;
+                            selected(i) => {
+                                ConvertUi.format = i;
+                                if (!ConvertUi.quality-custom) {
+                                    ConvertUi.quality = ConvertUi.formats[i].default-quality;
+                                }
+                            }
+                        }
+                        if root.image-format.lossy || root.image-format.lossless-mode || !root.image-format.alpha || root.image-format.is-ico || root.image-format.is-pdf: Divider { }
+                        if root.image-format.lossy && !(ConvertUi.lossless && root.image-format.lossless-mode): VerticalLayout {
+                            spacing: 2px;
+                            HorizontalLayout {
+                                Text {
+                                    horizontal-stretch: 1;
+                                    text: Strings.quality;
+                                    font-size: Theme.font-caption + 1px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                Pill {
+                                    text: round(ConvertUi.quality);
+                                    strong: true;
+                                    text-color: Theme.text-primary;
+                                }
+                            }
+                            Slider {
+                                minimum: 1;
+                                maximum: 100;
+                                step: 1;
+                                value <=> ConvertUi.quality;
+                                changed => {
+                                    ConvertUi.quality = round(self.value);
+                                    ConvertUi.quality-custom = true;
+                                }
+                            }
+                        }
+                        if root.image-format.lossless-mode: CheckBox {
+                            text: Strings.lossless;
+                            checked <=> ConvertUi.lossless;
+                        }
+                        if !root.image-format.alpha: ChipRow {
+                            label: Strings.background;
+                            items: Strings.backgrounds;
+                            current: ConvertUi.background-choice;
+                            chips-width: 180px;
+                            selected(i) => {
+                                ConvertUi.background-choice = i;
+                            }
+                        }
+                        if root.image-format.is-ico: SectionLabel {
+                            text: Strings.ico-sizes;
+                        }
+                        // Multi-select: each chip toggles one icon size.
+                        if root.image-format.is-ico: Rectangle {
+                            property <int> cols: 6;
+                            property <length> chip-width: (self.width - (self.cols - 1) * 6px) / self.cols;
+                            height: ceil(ConvertUi.ico-sizes.length / self.cols) * 36px - 6px;
+                            for size[i] in ConvertUi.ico-sizes: FormatChip {
+                                x: Math.mod(i, parent.cols) * (parent.chip-width + 6px);
+                                y: floor(i / parent.cols) * 36px;
+                                width: parent.chip-width;
+                                height: 30px;
+                                text: size.label;
+                                checked: size.checked;
+                                clicked => {
+                                    size.checked = !size.checked;
+                                }
+                            }
+                        }
+                        if root.image-format.is-pdf: ChipRow {
+                            label: Strings.pdf-page-size;
+                            items: Strings.pdf-page-sizes;
+                            current: ConvertUi.image-pdf-page-size;
+                            chips-width: 290px;
+                            selected(i) => {
+                                ConvertUi.image-pdf-page-size = i;
+                            }
+                        }
+                        if root.image-format.is-pdf: LabeledRow {
+                            label: Strings.pdf-margin;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 0;
+                                maximum: 100;
+                                value <=> ConvertUi.image-pdf-margin;
+                            }
+                        }
+                        if root.image-format.is-pdf: Hint {
+                            text: Strings.image-to-pdf-note;
+                        }
+                        if ConvertUi.has-svg && !root.image-format.is-pdf: LabeledRow {
+                            label: Strings.svg-width;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 1;
+                                maximum: 65535;
+                                value <=> ConvertUi.svg-width;
+                            }
+                        }
+                        if !root.image-format.is-pdf: Divider { }
+                        if !root.image-format.is-pdf: CheckBox {
+                            text: Strings.keep-metadata;
+                            checked <=> ConvertUi.convert-keep-metadata;
+                        }
+                        if !root.image-format.is-pdf: CheckBox {
+                            text: Strings.remove-gps;
+                            enabled: ConvertUi.convert-keep-metadata;
+                            checked <=> ConvertUi.convert-remove-gps;
+                        }
+                    }
+
+                    // Images: Compress
+                    if ConvertUi.category == 0 && ConvertUi.kind == 1: Panel {
+                        SectionLabel {
+                            text: Strings.compress-mode;
+                        }
+                        OptionGrid {
+                            items: [Strings.compress-best, Strings.compress-by-quality, Strings.compress-by-size];
+                            descriptions: Strings.compress-mode-descs;
+                            current: ConvertUi.compress-mode;
+                            columns: 3;
+                            selected(i) => {
+                                ConvertUi.compress-mode = i;
+                            }
+                        }
+                        if ConvertUi.compress-mode == 0: Hint {
+                            text: Strings.compress-best-hint;
+                        }
+                        if ConvertUi.compress-mode == 1: VerticalLayout {
+                            spacing: 2px;
+                            HorizontalLayout {
+                                Text {
+                                    horizontal-stretch: 1;
+                                    text: Strings.quality;
+                                    font-size: Theme.font-caption + 1px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                Pill {
+                                    text: ConvertUi.compress-quality-custom ? round(ConvertUi.compress-quality) : Strings.quality-default;
+                                    strong: true;
+                                    text-color: Theme.text-primary;
+                                }
+                            }
+                            Slider {
+                                minimum: 1;
+                                maximum: 100;
+                                step: 1;
+                                value <=> ConvertUi.compress-quality;
+                                changed => {
+                                    ConvertUi.compress-quality = round(self.value);
+                                    ConvertUi.compress-quality-custom = true;
+                                }
+                            }
+                        }
+                        if ConvertUi.compress-mode == 1: Hint {
+                            text: Strings.quality-compress-hint;
+                        }
+                        if ConvertUi.compress-mode == 2: LabeledRow {
+                            label: Strings.target-at-most;
+                            LineEdit {
+                                horizontal-stretch: 1;
+                                text <=> ConvertUi.target-value;
+                                accepted => {
+                                    ConvertUi.convert();
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                FormatChipGrid {
+                                    width: 110px;
+                                    items: Strings.units;
+                                    columns: 2;
+                                    chip-height: 30px;
+                                    current: ConvertUi.target-unit;
+                                    selected(i) => {
+                                        ConvertUi.target-unit = i;
+                                    }
+                                }
+                            }
+                        }
+                        Divider { }
+                        CheckBox {
+                            text: Strings.convert-to-webp;
+                            checked <=> ConvertUi.convert-to-webp;
+                        }
+                        // Best decides about PNG palettes by itself.
+                        if ConvertUi.compress-mode != 0: CheckBox {
+                            text: Strings.png-lossy;
+                            checked <=> ConvertUi.png-lossy;
+                        }
+                        CheckBox {
+                            text: Strings.keep-metadata;
+                            checked <=> ConvertUi.compress-keep-metadata;
+                        }
+                        CheckBox {
+                            text: Strings.remove-gps;
+                            enabled: ConvertUi.compress-keep-metadata;
+                            checked <=> ConvertUi.compress-remove-gps;
+                        }
+                    }
+
+                    // Images: Resize
+                    if ConvertUi.category == 0 && ConvertUi.kind == 2: Panel {
+                        SectionLabel {
+                            text: Strings.resize-mode;
+                        }
+                        FormatChipGrid {
+                            items: Strings.resize-modes;
+                            columns: 4;
+                            current: ConvertUi.resize-mode;
+                            selected(i) => {
+                                ConvertUi.resize-mode = i;
+                            }
+                        }
+                        if ConvertUi.resize-mode == 0: LabeledRow {
+                            label: Strings.percent;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 1;
+                                maximum: 1000;
+                                value <=> ConvertUi.percent;
+                            }
+                        }
+                        if ConvertUi.resize-mode == 1 || ConvertUi.resize-mode == 3: LabeledRow {
+                            label: Strings.width;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 1;
+                                maximum: 65535;
+                                value <=> ConvertUi.resize-width;
+                            }
+                        }
+                        if ConvertUi.resize-mode == 2 || ConvertUi.resize-mode == 3: LabeledRow {
+                            label: Strings.height;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 1;
+                                maximum: 65535;
+                                value <=> ConvertUi.resize-height;
+                            }
+                        }
+                        Divider { }
+                        if ConvertUi.resize-mode == 3: CheckBox {
+                            text: Strings.keep-aspect;
+                            checked <=> ConvertUi.keep-aspect;
+                        }
+                        CheckBox {
+                            text: Strings.no-enlarge;
+                            checked <=> ConvertUi.no-enlarge;
+                        }
+                        CheckBox {
+                            text: Strings.keep-metadata;
+                            checked <=> ConvertUi.resize-keep-metadata;
+                        }
+                        CheckBox {
+                            text: Strings.remove-gps;
+                            enabled: ConvertUi.resize-keep-metadata;
+                            checked <=> ConvertUi.resize-remove-gps;
+                        }
+                    }
+
+                    // Images: Clean & fix
+                    if ConvertUi.category == 0 && ConvertUi.kind == 3: Panel {
+                        SectionLabel {
+                            text: Strings.strip-label;
+                        }
+                        FormatChipGrid {
+                            items: Strings.strips;
+                            columns: 3;
+                            current: ConvertUi.strip;
+                            selected(i) => {
+                                ConvertUi.strip = i;
+                            }
+                        }
+                        SectionLabel {
+                            text: Strings.rotate;
+                        }
+                        FormatChipGrid {
+                            items: Strings.rotations;
+                            columns: 4;
+                            current: ConvertUi.rotate;
+                            selected(i) => {
+                                ConvertUi.rotate = i;
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: Theme.space-l;
+                            alignment: start;
+                            CheckBox {
+                                text: Strings.flip-h;
+                                checked <=> ConvertUi.flip-horizontal;
+                            }
+                            CheckBox {
+                                text: Strings.flip-v;
+                                checked <=> ConvertUi.flip-vertical;
+                            }
+                        }
+                        Hint {
+                            text: Strings.clean-rotate-note;
+                        }
+                    }
+
+                    // PDF: Convert (chips)
+                    if ConvertUi.category == 1 && root.pdf-tab == 0: Panel {
+                        SectionLabel {
+                            text: Strings.pdf-convert-to;
+                        }
+                        FormatChipGrid {
+                            items: Strings.pdf-convert-chips;
+                            columns: 5;
+                            current: root.pdf-chip;
+                            selected(i) => {
+                                root.set-pdf-chip(i);
+                            }
+                        }
+                        Divider { }
+
+                        // → Word
+                        if ConvertUi.pdf-kind == 2: Hint {
+                            text: Strings.pdf-to-word-warning;
+                            font-size: Theme.font-caption + 1px;
+                            color: Theme.text-primary;
+                        }
+                        if ConvertUi.pdf-kind == 2: Hint {
+                            text: Strings.pdf-to-word-note;
+                        }
+
+                        // → Markdown / HTML
+                        if ConvertUi.pdf-kind == 3: CheckBox {
+                            text: Strings.save-pictures;
+                            checked <=> ConvertUi.pdf-markup-images;
+                        }
+                        if ConvertUi.pdf-kind == 3: Hint {
+                            text: Strings.pdf-to-markdown-note;
+                        }
+
+                        // → Images
+                        if ConvertUi.pdf-kind == 1: ChipRow {
+                            label: Strings.format;
+                            items: Strings.pdf-image-formats;
+                            current: ConvertUi.pdf-image-format;
+                            chips-width: 240px;
+                            selected(i) => {
+                                ConvertUi.pdf-image-format = i;
+                            }
+                        }
+                        if ConvertUi.pdf-kind == 1: LabeledRow {
+                            label: Strings.pdf-dpi;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.pdf-dpis;
+                                current-index <=> ConvertUi.pdf-dpi-choice;
+                            }
+                        }
+                        if ConvertUi.pdf-kind == 1 && ConvertUi.pdf-dpi-choice == Strings.pdf-dpis.length - 1: LabeledRow {
+                            label: Strings.pdf-dpi-value;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 36;
+                                maximum: 1200;
+                                value <=> ConvertUi.pdf-dpi-custom;
+                            }
+                        }
+                        if ConvertUi.pdf-kind == 1: LabeledRow {
+                            label: Strings.pdf-pages;
+                            LineEdit {
+                                horizontal-stretch: 1;
+                                placeholder-text: Strings.pdf-pages-placeholder;
+                                text <=> ConvertUi.pdf-pages;
+                                accepted => {
+                                    ConvertUi.convert();
+                                }
+                            }
+                        }
+                        if ConvertUi.pdf-kind == 1 && root.pages-error != "": ErrorText {
+                            text: root.pages-error;
+                        }
+                        if ConvertUi.pdf-kind == 1: Hint {
+                            text: Strings.pdf-to-images-note;
+                        }
+
+                        // → Plain text
+                        if ConvertUi.pdf-kind == 4: CheckBox {
+                            text: Strings.pdf-page-separators;
+                            checked <=> ConvertUi.pdf-page-separators;
+                        }
+                        if ConvertUi.pdf-kind == 4: Hint {
+                            text: Strings.pdf-to-text-note;
+                        }
+                        if ConvertUi.pdf-kind == 2 && ConvertUi.engine-line != "": Hint {
+                            text: ConvertUi.engine-line;
+                        }
+                    }
+
+                    // PDF: Compress
+                    if ConvertUi.category == 1 && ConvertUi.pdf-kind == 0: Panel {
+                        SectionLabel {
+                            text: Strings.pdf-compression;
+                        }
+                        OptionGrid {
+                            items: Strings.pdf-presets;
+                            descriptions: Strings.pdf-preset-descs;
+                            current: ConvertUi.pdf-preset;
+                            columns: 2;
+                            selected(i) => {
+                                ConvertUi.pdf-preset = i;
+                            }
+                        }
+                        Hint {
+                            text: Strings.pdf-preset-hints[ConvertUi.pdf-preset];
+                        }
+                        if ConvertUi.pdf-preset == 3: LabeledRow {
+                            label: Strings.pdf-max-dpi;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 36;
+                                maximum: 1200;
+                                value <=> ConvertUi.pdf-compress-dpi;
+                            }
+                        }
+                        if ConvertUi.pdf-preset == 3: LabeledRow {
+                            label: Strings.quality;
+                            Slider {
+                                horizontal-stretch: 1;
+                                minimum: 1;
+                                maximum: 100;
+                                step: 1;
+                                value <=> ConvertUi.pdf-compress-quality;
+                                changed => {
+                                    ConvertUi.pdf-compress-quality = round(self.value);
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Pill {
+                                    text: round(ConvertUi.pdf-compress-quality);
+                                    strong: true;
+                                    text-color: Theme.text-primary;
+                                }
+                            }
+                        }
+                        Divider { }
+                        Hint {
+                            text: Strings.pdf-compress-note;
+                        }
+                    }
+
+                    // PDF: Split
+                    if ConvertUi.category == 1 && ConvertUi.pdf-kind == 5: Panel {
+                        SectionLabel {
+                            text: Strings.pdf-split-mode;
+                        }
+                        FormatChipGrid {
+                            items: Strings.pdf-split-modes;
+                            columns: 3;
+                            current: ConvertUi.pdf-split-mode;
+                            selected(i) => {
+                                ConvertUi.pdf-split-mode = i;
+                            }
+                        }
+                        if ConvertUi.pdf-split-mode == 1: LabeledRow {
+                            label: Strings.pdf-split-every;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 1;
+                                maximum: 10000;
+                                value <=> ConvertUi.pdf-split-every;
+                            }
+                        }
+                        if ConvertUi.pdf-split-mode == 2: LabeledRow {
+                            label: Strings.pdf-split-ranges;
+                            LineEdit {
+                                horizontal-stretch: 1;
+                                placeholder-text: Strings.pdf-split-ranges-placeholder;
+                                text <=> ConvertUi.pdf-split-ranges;
+                                accepted => {
+                                    ConvertUi.convert();
+                                }
+                            }
+                        }
+                        // Empty is reported on Convert, not while the box is still empty.
+                        if ConvertUi.pdf-split-mode == 2 && ConvertUi.pdf-split-ranges != "" && root.split-ranges-error != "": ErrorText {
+                            text: root.split-ranges-error;
+                        }
+                        Hint {
+                            text: Strings.pdf-split-note;
+                        }
+                    }
+
+                    // PDF: Merge
+                    if ConvertUi.category == 1 && ConvertUi.pdf-kind == 6: Panel {
+                        ChipRow {
+                            label: Strings.pdf-page-size;
+                            items: Strings.pdf-page-sizes;
+                            current: ConvertUi.pdf-page-size;
+                            chips-width: 290px;
+                            selected(i) => {
+                                ConvertUi.pdf-page-size = i;
+                            }
+                        }
+                        LabeledRow {
+                            label: Strings.pdf-margin;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 0;
+                                maximum: 100;
+                                value <=> ConvertUi.pdf-margin;
+                            }
+                        }
+                        CheckBox {
+                            text: Strings.pdf-bookmarks;
+                            checked <=> ConvertUi.pdf-bookmarks;
+                        }
+                        Hint {
+                            text: Strings.pdf-merge-note;
+                        }
+                    }
+
+                    // Documents: Convert
+                    if ConvertUi.category == 2 && ConvertUi.office-kind == 0: Panel {
+                        SectionLabel {
+                            text: Strings.office-convert-to;
+                        }
+                        FormatChipGrid {
+                            items: ConvertUi.office-target-short;
+                            columns: 4;
+                            current: ConvertUi.office-format;
+                            selected(i) => {
+                                ConvertUi.office-format = i;
+                                ConvertUi.action-changed();
+                            }
+                        }
+                        Divider { }
+                        if root.show-csv-options: LabeledRow {
+                            label: Strings.csv-delimiter;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.csv-delimiters;
+                                current-index <=> ConvertUi.office-delimiter;
+                            }
+                        }
+                        if root.show-csv-options: Hint {
+                            text: Strings.csv-delimiter-hint;
+                        }
+                        if ConvertUi.office-format == ConvertUi.office-csv-target: CheckBox {
+                            text: Strings.csv-bom;
+                            checked <=> ConvertUi.office-csv-bom;
+                        }
+                        if ConvertUi.office-format == ConvertUi.office-md-target && ConvertUi.office-md-pictures: CheckBox {
+                            text: Strings.save-pictures;
+                            checked <=> ConvertUi.office-images;
+                        }
+                        if ConvertUi.office-format == ConvertUi.office-md-target && ConvertUi.office-md-sheets: LabeledRow {
+                            label: Strings.max-rows;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 0;
+                                maximum: 1000000;
+                                value <=> ConvertUi.office-max-rows;
+                            }
+                        }
+                        if ConvertUi.office-format == ConvertUi.office-md-target && ConvertUi.office-md-slides: CheckBox {
+                            text: Strings.slide-notes;
+                            checked <=> ConvertUi.office-slide-notes;
+                        }
+                        Hint {
+                            text: Strings.office-convert-note;
+                        }
+                        if ConvertUi.engine-line != "": Hint {
+                            text: ConvertUi.engine-line;
+                        }
+                    }
+
+                    // Documents: Export as images
+                    if ConvertUi.category == 2 && ConvertUi.office-kind == 1: Panel {
+                        ChipRow {
+                            label: Strings.format;
+                            items: Strings.office-image-formats;
+                            current: ConvertUi.office-image-format;
+                            chips-width: 180px;
+                            selected(i) => {
+                                ConvertUi.office-image-format = i;
+                            }
+                        }
+                        LabeledRow {
+                            label: Strings.pdf-dpi;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.pdf-dpis;
+                                current-index <=> ConvertUi.office-dpi-choice;
+                            }
+                        }
+                        if ConvertUi.office-dpi-choice == Strings.pdf-dpis.length - 1: LabeledRow {
+                            label: Strings.pdf-dpi-value;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 36;
+                                maximum: 1200;
+                                value <=> ConvertUi.office-dpi-custom;
+                            }
+                        }
+                        Hint {
+                            text: ConvertUi.office-has-images ? Strings.office-images-note : Strings.office-images-only;
+                        }
+                        if ConvertUi.engine-line != "": Hint {
+                            text: ConvertUi.engine-line;
+                        }
+                    }
+
+                    // Video: Convert
+                    if ConvertUi.category == 3 && ConvertUi.media-tab == 0 && ConvertUi.video-kind == 0: Panel {
+                        SectionLabel {
+                            text: Strings.format;
+                        }
+                        FormatChipGrid {
+                            items: Strings.video-containers;
+                            columns: 5;
+                            current: ConvertUi.video-container;
+                            selected(i) => {
+                                ConvertUi.video-container = i;
+                                ConvertUi.action-changed();
+                            }
+                        }
+                        Divider { }
+                        CheckBox {
+                            text: Strings.video-fast;
+                            checked <=> ConvertUi.video-fast;
+                        }
+                        Hint {
+                            text: Strings.video-fast-hint;
+                        }
+                        Expander {
+                            open <=> ConvertUi.media-advanced;
+                        }
+                        if ConvertUi.media-advanced: LabeledRow {
+                            label: Strings.video-codec;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.video-codecs;
+                                current-index <=> ConvertUi.video-codec;
+                            }
+                        }
+                        if ConvertUi.media-advanced: LabeledRow {
+                            label: Strings.audio-codec;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.video-audio-codecs;
+                                current-index <=> ConvertUi.video-audio-codec;
+                            }
+                        }
+                        if ConvertUi.media-advanced: LabeledRow {
+                            label: Strings.video-quality;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.video-qualities;
+                                current-index <=> ConvertUi.video-quality;
+                            }
+                        }
+                        if ConvertUi.media-advanced: LabeledRow {
+                            label: Strings.video-encoder;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.video-encoders;
+                                current-index <=> ConvertUi.video-convert-encoder;
+                            }
+                        }
+                        Hint {
+                            text: Strings.video-convert-note;
+                        }
+                    }
+
+                    // Video: Compress
+                    if ConvertUi.category == 3 && ConvertUi.media-tab == 0 && ConvertUi.video-kind == 1: Panel {
+                        SectionLabel {
+                            text: Strings.video-preset;
+                        }
+                        FormatChipGrid {
+                            items: Strings.video-presets;
+                            columns: 3;
+                            current: ConvertUi.video-preset;
+                            selected(i) => {
+                                ConvertUi.video-preset = i;
+                                ConvertUi.action-changed();
+                            }
+                        }
+                        Hint {
+                            text: Strings.video-preset-hints[ConvertUi.video-preset];
+                        }
+                        if ConvertUi.video-preset == 5: LabeledRow {
+                            label: Strings.video-target-mb;
+                            LineEdit {
+                                horizontal-stretch: 1;
+                                input-type: number;
+                                text <=> ConvertUi.video-target-mb;
+                                accepted => {
+                                    ConvertUi.convert();
+                                }
+                            }
+                        }
+                        // Best keeps the resolution by design.
+                        if ConvertUi.video-preset != 0: Divider { }
+                        if ConvertUi.video-preset != 0: SectionLabel {
+                            text: Strings.video-resolution;
+                        }
+                        if ConvertUi.video-preset != 0: FormatChipGrid {
+                            items: Strings.video-resolutions;
+                            columns: 4;
+                            current: ConvertUi.video-resolution;
+                            selected(i) => {
+                                ConvertUi.video-resolution = i;
+                            }
+                        }
+                        if ConvertUi.video-preset != 0: Hint {
+                            text: Strings.video-resolution-hint;
+                        }
+                        Expander {
+                            open <=> ConvertUi.media-advanced;
+                        }
+                        if ConvertUi.media-advanced: LabeledRow {
+                            label: Strings.video-encoder;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.video-encoders;
+                                current-index <=> ConvertUi.video-compress-encoder;
+                            }
+                        }
+                    }
+
+                    // Video: Extract audio
+                    if ConvertUi.category == 3 && ConvertUi.media-tab == 0 && ConvertUi.video-kind == 2: AudioOptions {
+                        formats: ConvertUi.extract-formats;
+                        format-labels: ConvertUi.extract-format-labels;
+                        format <=> ConvertUi.extract-format;
+                        bitrate <=> ConvertUi.extract-bitrate;
+                        mp3-mode <=> ConvertUi.extract-mp3-mode;
+                        sample-rate <=> ConvertUi.extract-sample-rate;
+                        channels <=> ConvertUi.extract-channels;
+                        keep-tags <=> ConvertUi.extract-keep-tags;
+                        advanced <=> ConvertUi.media-advanced;
+                        lossy-input: false;
+                        Hint {
+                            text: Strings.extract-audio-note;
+                        }
+                    }
+
+                    // Video: Convert to GIF
+                    if ConvertUi.category == 3 && ConvertUi.media-tab == 0 && ConvertUi.video-kind == 3: Panel {
+                        LabeledRow {
+                            label: Strings.gif-start;
+                            LineEdit {
+                                horizontal-stretch: 1;
+                                placeholder-text: Strings.gif-start-placeholder;
+                                text <=> ConvertUi.gif-start;
+                                accepted => {
+                                    ConvertUi.convert();
+                                }
+                            }
+                        }
+                        if root.gif-start-error != "": ErrorText {
+                            text: root.gif-start-error;
+                        }
+                        LabeledRow {
+                            label: Strings.gif-length;
+                            SpinBox {
+                                horizontal-stretch: 1;
+                                minimum: 1;
+                                maximum: 60;
+                                value <=> ConvertUi.gif-length;
+                            }
+                        }
+                        Divider { }
+                        LabeledRow {
+                            label: Strings.gif-width;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.gif-widths;
+                                current-index <=> ConvertUi.gif-width;
+                            }
+                        }
+                        LabeledRow {
+                            label: Strings.gif-fps;
+                            ComboBox {
+                                horizontal-stretch: 1;
+                                model: Strings.gif-fps-choices;
+                                current-index <=> ConvertUi.gif-fps;
+                            }
+                        }
+                        Hint {
+                            text: Strings.gif-note;
+                        }
+                    }
+
+                    // Audio: Convert
+                    if ConvertUi.category == 3 && ConvertUi.media-tab == 1: AudioOptions {
+                        formats: ConvertUi.audio-formats;
+                        format-labels: ConvertUi.audio-format-labels;
+                        format <=> ConvertUi.audio-format;
+                        bitrate <=> ConvertUi.audio-bitrate;
+                        mp3-mode <=> ConvertUi.audio-mp3-mode;
+                        sample-rate <=> ConvertUi.audio-sample-rate;
+                        channels <=> ConvertUi.audio-channels;
+                        keep-tags <=> ConvertUi.audio-keep-tags;
+                        advanced <=> ConvertUi.media-advanced;
+                        lossy-input: ConvertUi.audio-lossy-input;
+                        Hint {
+                            text: Strings.audio-convert-note;
+                        }
+                    }
+                }
+                // Takes the spare height of the tall content layout.
+                Rectangle {
+                    vertical-stretch: 1;
+                }
+            }
+        }
+
+        // ── 4. Output & action footer ──
+        footer-card := SubtleCard {
+            inner-padding: Theme.space-m;
+            inner-spacing: 10px;
+            HorizontalLayout {
+                spacing: Theme.space-m;
+                Text {
+                    horizontal-stretch: 1;
+                    text: Strings.save-to;
+                    font-size: Theme.font-caption + 1px;
+                    font-weight: Theme.weight-semibold;
+                    color: Theme.text-secondary;
+                    vertical-alignment: center;
+                }
+                FormatChipGrid {
+                    // Narrow window: the chips shrink (elided) instead of
+                    // pushing the footer past the window edge.
+                    horizontal-stretch: 3;
+                    max-width: 380px;
+                    items: [Strings.save-next-to, Strings.save-choose];
+                    columns: 2;
+                    chip-height: 30px;
+                    current: ConvertUi.use-folder ? 1 : 0;
+                    selected(i) => {
+                        if (i == 0) {
+                            ConvertUi.use-folder = false;
+                        } else {
+                            ConvertUi.select-folder();
+                        }
+                    }
+                }
+            }
+            if ConvertUi.use-folder: Rectangle {
+                height: 36px;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.border-input;
+                background: Theme.surface-input;
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 3px;
+                    spacing: Theme.space-s;
+                    VerticalLayout {
+                        alignment: center;
+                        Icon {
+                            source: Icons.folder;
+                            width: 14px;
+                            height: 14px;
+                            colorize: Theme.text-secondary;
+                        }
+                    }
+                    Text {
+                        horizontal-stretch: 1;
+                        text: ConvertUi.folder-text != "" ? ConvertUi.folder-text : Strings.save-no-folder;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.font-caption;
+                        color: Theme.text-primary;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Button {
+                            text: Strings.save-browse;
+                            clicked => {
+                                ConvertUi.choose-folder();
+                            }
+                        }
+                    }
+                }
+            }
+            if ConvertUi.form-error != "": ErrorText {
+                text: ConvertUi.form-error;
+                font-size: Theme.font-caption + 1px;
+            }
+            Divider { }
+            HorizontalLayout {
+                spacing: Theme.space-s;
+                CheckBox {
+                    text: Strings.remember;
+                    checked <=> ConvertUi.remember;
+                }
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+                Button {
+                    text: Strings.cancel;
+                    clicked => {
+                        ConvertUi.cancel();
+                    }
+                }
+                Button {
+                    text: ConvertUi.convert-label;
+                    primary: true;
+                    enabled: ConvertUi.convert-enabled;
+                    clicked => {
+                        ConvertUi.convert();
+                    }
+                }
+            }
+        }
+    }
+}

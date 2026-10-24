@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# cargo-about config for scripts\make-notices.ps1 (Rust crates compiled into the shipped binaries).
+# Order = preference when a crate offers a choice ("MIT OR Apache-2.0" -> MIT).
+# Slint is used under GPL-3.0-only (its LicenseRef-Slint-* options are deliberately not accepted).
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "Unlicense",
+    "CC0-1.0",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "IJG",
+    "GPL-3.0-or-later",
+    "GPL-3.0-only",
+]
+targets = ["x86_64-pc-windows-msvc"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true

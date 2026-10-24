@@ -1,0 +1,26 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.heic binary
+*.gif binary
+*.bmp binary
+*.tif binary
+*.tiff binary
+*.qoi binary
+*.tga binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.odt binary
+# Text fixtures keep their exact bytes (CRLF, BOM).
+tests/fixtures/*.csv -text
+tests/fixtures/*.txt -text
+tests/fixtures/*.html -text
+tests/fixtures/sample.md -text
+# Windows batch files need CRLF line endings.
+*.cmd text eol=crlf
+packaging/release/README.txt text eol=crlf

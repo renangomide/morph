@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Shared CI setup: Rust, cargo cache, vcpkg libheif/aom (static), PDFium + FFmpeg in vendor\.
+name: Setup Morph build
+description: Rust toolchain, cached vcpkg install and cached vendor\ binaries.
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    # rav1e (AVIF encoder, "asm" feature) and mozjpeg-sys (SIMD) assemble with NASM; the runner has none.
+    - uses: ilammy/setup-nasm@v1
+
+    - uses: Swatinem/rust-cache@v2
+
+    # windows-latest ships a git clone of vcpkg in C:\vcpkg. The vcpkg crate (used by libheif-sys)
+    # reads VCPKG_ROOT and links the x64-windows-static triplet from <root>\installed.
+    - name: Set VCPKG_ROOT
+      shell: powershell
+      run: Add-Content -Path $env:GITHUB_ENV -Value 'VCPKG_ROOT=C:\vcpkg'
+
+    - name: Restore vcpkg packages
+      id: vcpkg-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: C:\vcpkg\installed
+        key: vcpkg-x64-windows-static-${{ hashFiles('vcpkg.json') }}
+
+    # ~20 min on a cache miss (aom is big). Same command as CLAUDE.md / BUILDING.md.
+    - name: Install libheif + aom (vcpkg)
+      if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        git -C $env:VCPKG_ROOT fetch --quiet origin   # make sure vcpkg.json's builtin-baseline commit is known
+        & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows-static --x-install-root="$env:VCPKG_ROOT\installed"
+        if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed (exit code $LASTEXITCODE)" }
+
+    # Saved right away, so a later failing step does not throw the 20-minute build away.
+    - name: Save vcpkg packages
+      if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: C:\vcpkg\installed
+        key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+    - name: Cache vendor binaries (PDFium, FFmpeg)
+      uses: actions/cache@v4
+      with:
+        path: vendor
+        key: vendor-${{ hashFiles('scripts/fetch-deps.ps1') }}
+
+    # Idempotent: a no-op on a cache hit; on a miss it downloads ~70 MB and checks SHA-256.
+    - name: Fetch vendor binaries
+      shell: powershell
+      run: .\scripts\fetch-deps.ps1

@@ -1,0 +1,16 @@
+{
+  "name": "morph-readme-gif",
+  "private": true,
+  "description": "Renders the animated demo at the top of Morph's README (out/menu.gif) from code: HTML/CSS/SVG in headless Chrome, encoded with FFmpeg.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "photos": "node scripts/gen-photos.mjs",
+    "convert": "node scripts/convert.mjs",
+    "render": "node scripts/render.mjs",
+    "encode": "node scripts/encode.mjs",
+    "stills": "node scripts/render.mjs --still"
+  }
+}

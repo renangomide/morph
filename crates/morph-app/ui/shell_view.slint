@@ -1,0 +1,1171 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Main window (SPEC §3.4): WinUI navigation rail with
+// Convert (dashed drop zone + Browse files… + supported-type cards) and
+// Settings (`HomePage`, `page == 3`), and the same Settings page inside the
+// conversion window with a Back button (`SettingsView`, `page == 4`).
+// No user-visible strings here: text comes from
+// Rust (`src/strings/home.rs`, set in `src/home.rs`) through `HomeUi`.
+
+import { Button, CheckBox, Slider, SpinBox, ComboBox, ScrollView } from "std-widgets.slint";
+import { Card, SubtleCard, CategoryBadge, ExpanderCard, IconButton, Pill, ToggleRow } from "widgets.slint";
+import { Icons, Icon } from "icons.slint";
+import { Theme } from "theme.slint";
+
+// Rust side: `window.global::<HomeUi>()` (exported from main.slint).
+export global HomeUi {
+    // 0 = Convert, 1 = Settings.
+    in-out property <int> nav;
+    // Files are being dragged over the window (drop zone highlight).
+    in-out property <bool> drag-over;
+    // Expanders of the Settings page (kept while switching pages).
+    in-out property <bool> defaults-expanded;
+    in-out property <bool> licenses-expanded;
+
+    // ── Text ──
+    in property <string> nav-convert;
+    in property <string> nav-settings;
+    in property <string> nav-tip-title;
+    in property <string> nav-tip-text;
+    in property <string> drop-title;
+    in property <string> drop-hint;
+    in property <string> browse;
+    // Supported-type cards under the button (categories 0, 1, 2, 4).
+    in property <[string]> drop-card-names;
+    in property <[string]> drop-card-formats;
+    in property <string> settings-description;
+    in property <string> sec-file-types;
+    in property <string> file-types-hint;
+    in property <string> type-images;
+    in property <string> type-pdf;
+    in property <string> type-video;
+    in property <string> type-audio;
+    in property <string> type-office;
+    // Same order as the five type toggles.
+    in property <[string]> type-descriptions;
+    in property <string> sec-defaults;
+    in property <string> defaults-title;
+    // "JPG 85 · WebP 80 · …", also while collapsed.
+    in property <string> defaults-summary;
+    in property <string> defaults-hint;
+    in property <string> jpeg-quality-label;
+    in property <string> webp-quality-label;
+    in property <string> avif-quality-label;
+    in property <string> png-level-label;
+    in property <string> pdf-preset-label;
+    in property <[string]> pdf-preset-names;
+    in property <string> video-preset-label;
+    in property <[string]> video-preset-names;
+    in property <string> video-encoder-label;
+    in property <[string]> video-encoder-names;
+    in property <string> mp3-bitrate-label;
+    in property <[string]> mp3-bitrate-names;
+    in property <string> pdf-dpi-label;
+    in property <[string]> pdf-dpi-names;
+    in property <string> sec-output;
+    in property <string> output-location-label;
+    in property <string> output-location-hint;
+    in property <string> output-next-to;
+    in property <string> output-folder;
+    in property <string> choose-folder-label;
+    in property <string> open-folder-label;
+    in property <string> keep-dates-label;
+    in property <string> sec-engines;
+    in property <string> office-engine-label;
+    in property <string> office-engine-hint;
+    in property <[string]> engine-names;
+    in property <string> check-again;
+    in property <string> download-libreoffice-label;
+    in property <string> image-jobs-label;
+    in property <string> image-jobs-hint;
+    in property <[string]> image-jobs-names;
+    in property <string> use-gpu-label;
+    in property <string> sec-appearance;
+    in property <string> theme-label;
+    in property <string> theme-hint;
+    in property <[string]> theme-names;
+    in property <string> toast-label;
+    in property <string> toast-hint;
+    in property <string> sec-about;
+    in property <string> version-text;
+    in property <string> about-description;
+    in property <string> github-label;
+    in property <string> issues-label;
+    in property <string> open-logs-label;
+    in property <string> third-party-label;
+    in property <string> third-party-summary;
+    in property <string> third-party-hint;
+    in property <[string]> third-party;
+
+    // ── Settings values (see `home/form.rs`) ──
+    in-out property <bool> images;
+    in-out property <bool> pdf;
+    in-out property <bool> video;
+    in-out property <bool> audio;
+    in-out property <bool> office;
+    in-out property <float> jpeg-quality;
+    in-out property <float> webp-quality;
+    in-out property <float> avif-quality;
+    in-out property <int> png-level;
+    in-out property <int> pdf-preset;
+    in-out property <int> video-preset;
+    in-out property <int> video-encoder;
+    in-out property <int> mp3-bitrate;
+    in-out property <int> pdf-dpi;
+    in-out property <int> output-mode;
+    in property <string> folder-text;
+    in-out property <bool> open-folder-when-done;
+    in-out property <bool> keep-dates;
+    in-out property <int> engine;
+    in property <[string]> engine-status;
+    // Same length as `engine-status`: found (✓) or not (✕).
+    in property <[bool]> engine-found;
+    in property <bool> libreoffice-missing;
+    in-out property <int> image-jobs;
+    in-out property <bool> use-gpu;
+    in property <string> gpu-status;
+    in-out property <bool> toast;
+    in-out property <int> theme;
+    // Plain error when config.toml couldn't be written ("" = fine).
+    in property <string> save-error;
+
+    callback browse-files();
+    // The Settings page opened: refresh values and engine status.
+    callback show-settings();
+    // Any setting changed: save now (sliders: `changed-soon`, saved after a pause).
+    callback changed();
+    callback changed-soon();
+    callback choose-folder();
+    callback check-engines();
+    callback download-libreoffice();
+    callback open-github();
+    callback open-issues();
+    callback open-logs();
+
+    // ── Settings inside the conversion window (M9, `page == 4`) ──
+    // "Back" and its accessible name; the page title ("Settings").
+    in property <string> back-label;
+    // Back: the conversion window again, selection and options unchanged
+    // (wired in `controller.rs`, not `home.rs`).
+    callback back();
+}
+
+// ── Navigation rail ─────────────────────────────────────────────────────────
+
+component NavItem {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> selected;
+    callback clicked();
+
+    height: 36px;
+    accessible-role: tab;
+    accessible-label: root.text;
+    accessible-item-selected: root.selected;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: fs;
+
+    fs := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+
+        touch := TouchArea {
+            clicked => {
+                root.clicked();
+            }
+        }
+
+        Rectangle {
+            border-radius: Theme.radius-control + 2px;
+            background: root.selected ? Theme.accent : touch.has-hover ? Theme.surface-hover : transparent;
+            animate background { duration: Theme.motion-fast; }
+        }
+
+        HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 8px;
+            spacing: 10px;
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    source: root.icon;
+                    colorize: root.selected ? Theme.accent-foreground : Theme.text-secondary;
+                }
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.text;
+                font-size: Theme.font-body;
+                font-weight: root.selected ? Theme.weight-semibold : Theme.weight-regular;
+                color: root.selected ? Theme.accent-foreground : Theme.text-secondary;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        if fs.has-focus: Rectangle {
+            border-width: 2px;
+            border-radius: Theme.radius-control + 2px;
+            border-color: Theme.text-primary;
+        }
+    }
+}
+
+component NavRail inherits Rectangle {
+    width: 184px;
+    background: Theme.surface-sidebar;
+
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.border-subtle;
+    }
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 4px;
+        NavItem {
+            icon: Icons.upload;
+            text: HomeUi.nav-convert;
+            selected: HomeUi.nav == 0;
+            clicked => {
+                HomeUi.nav = 0;
+            }
+        }
+        NavItem {
+            icon: Icons.gear;
+            text: HomeUi.nav-settings;
+            selected: HomeUi.nav == 1;
+            clicked => {
+                if (HomeUi.nav != 1) {
+                    HomeUi.nav = 1;
+                    HomeUi.show-settings();
+                }
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+        }
+        SubtleCard {
+            inner-padding: 10px;
+            inner-spacing: 2px;
+            Text {
+                text: HomeUi.nav-tip-title;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                color: Theme.text-secondary;
+                wrap: word-wrap;
+            }
+            Text {
+                text: HomeUi.nav-tip-text;
+                font-size: Theme.font-caption;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+// ── Convert page: drop zone ─────────────────────────────────────────────────
+
+// A dashed rounded outline (Slint has no dashed borders): dashes along the
+// straight edges, quarter circles at the corners.
+component DashedFrame {
+    in property <brush> stroke;
+    in property <length> radius: 12px;
+    in property <length> thickness: 2px;
+    property <length> dash: 8px;
+    property <length> gap: 6px;
+    property <length> h-len: max(0px, root.width - 2 * root.radius);
+    property <length> v-len: max(0px, root.height - 2 * root.radius);
+    property <int> h-count: max(1, floor((root.h-len + root.gap) / (root.dash + root.gap)));
+    property <int> v-count: max(1, floor((root.v-len + root.gap) / (root.dash + root.gap)));
+    property <length> h-step: root.h-len / root.h-count;
+    property <length> v-step: root.v-len / root.v-count;
+
+    for i in root.h-count: Rectangle {
+        x: root.radius + i * root.h-step + (root.h-step - root.dash) / 2;
+        y: 0;
+        width: root.dash;
+        height: root.thickness;
+        background: root.stroke;
+    }
+    for i in root.h-count: Rectangle {
+        x: root.radius + i * root.h-step + (root.h-step - root.dash) / 2;
+        y: root.height - root.thickness;
+        width: root.dash;
+        height: root.thickness;
+        background: root.stroke;
+    }
+    for i in root.v-count: Rectangle {
+        x: 0;
+        y: root.radius + i * root.v-step + (root.v-step - root.dash) / 2;
+        width: root.thickness;
+        height: root.dash;
+        background: root.stroke;
+    }
+    for i in root.v-count: Rectangle {
+        x: root.width - root.thickness;
+        y: root.radius + i * root.v-step + (root.v-step - root.dash) / 2;
+        width: root.thickness;
+        height: root.dash;
+        background: root.stroke;
+    }
+    // Corners: a ring clipped to one quarter.
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.radius;
+        height: root.radius;
+        clip: true;
+        Rectangle {
+            x: 0;
+            y: 0;
+            width: 2 * root.radius;
+            height: 2 * root.radius;
+            border-radius: root.radius;
+            border-width: root.thickness;
+            border-color: root.stroke;
+        }
+    }
+    Rectangle {
+        x: root.width - root.radius;
+        y: 0;
+        width: root.radius;
+        height: root.radius;
+        clip: true;
+        Rectangle {
+            x: -root.radius;
+            y: 0;
+            width: 2 * root.radius;
+            height: 2 * root.radius;
+            border-radius: root.radius;
+            border-width: root.thickness;
+            border-color: root.stroke;
+        }
+    }
+    Rectangle {
+        x: 0;
+        y: root.height - root.radius;
+        width: root.radius;
+        height: root.radius;
+        clip: true;
+        Rectangle {
+            x: 0;
+            y: -root.radius;
+            width: 2 * root.radius;
+            height: 2 * root.radius;
+            border-radius: root.radius;
+            border-width: root.thickness;
+            border-color: root.stroke;
+        }
+    }
+    Rectangle {
+        x: root.width - root.radius;
+        y: root.height - root.radius;
+        width: root.radius;
+        height: root.radius;
+        clip: true;
+        Rectangle {
+            x: -root.radius;
+            y: -root.radius;
+            width: 2 * root.radius;
+            height: 2 * root.radius;
+            border-radius: root.radius;
+            border-width: root.thickness;
+            border-color: root.stroke;
+        }
+    }
+}
+
+// One supported-type card under "Browse files…" (information only: a click
+// falls through to the drop zone and opens the file picker).
+component DropCard inherits Rectangle {
+    in property <int> category;
+    in property <string> name;
+    in property <string> formats;
+
+    background: Theme.surface-card;
+    border-radius: Theme.radius-card;
+    border-width: 1px;
+    border-color: Theme.border-card;
+    HorizontalLayout {
+        padding: 10px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: start;
+            CategoryBadge {
+                category: root.category;
+                size: 28px;
+            }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: start;
+            spacing: 2px;
+            Text {
+                text: root.name;
+                font-size: Theme.font-caption;
+                font-weight: Theme.weight-semibold;
+                color: Theme.text-primary;
+                wrap: word-wrap;
+            }
+            Text {
+                text: root.formats;
+                font-size: Theme.font-caption;
+                color: Theme.text-muted;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+component DropZone {
+    property <bool> lit: touch.has-hover || HomeUi.drag-over;
+    // Four cards in one row when there is room, else two rows of two (set
+    // from the window width: the zone's own width would be a binding loop).
+    in property <bool> wide;
+    // Width of the card area (from the window width, same reason).
+    in property <length> cards-width;
+    accessible-role: button;
+    accessible-label: HomeUi.drop-title;
+    accessible-description: HomeUi.drop-hint;
+    accessible-action-default => {
+        HomeUi.browse-files();
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            HomeUi.browse-files();
+        }
+    }
+
+    Rectangle {
+        border-radius: 12px;
+        background: root.lit ? Theme.accent-tint : Theme.surface-card-subtle;
+        animate background { duration: Theme.motion-fast; }
+    }
+    DashedFrame {
+        width: 100%;
+        height: 100%;
+        radius: 12px;
+        stroke: root.lit ? Theme.accent : Theme.border-input;
+    }
+
+    VerticalLayout {
+        alignment: center;
+        padding: 24px;
+        spacing: 6px;
+        HorizontalLayout {
+            alignment: center;
+            padding-bottom: 10px;
+            Rectangle {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+                background: Theme.accent-tint;
+                Icon {
+                    source: Icons.upload;
+                    width: 28px;
+                    height: 28px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    colorize: Theme.accent-text;
+                }
+            }
+        }
+        Text {
+            text: HomeUi.drop-title;
+            font-size: Theme.font-body-large;
+            font-weight: Theme.weight-semibold;
+            color: Theme.text-primary;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            alignment: center;
+            Text {
+                max-width: 400px;
+                text: HomeUi.drop-hint;
+                font-size: Theme.font-caption;
+                color: Theme.text-muted;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+        HorizontalLayout {
+            alignment: center;
+            padding-top: 14px;
+            Button {
+                text: HomeUi.browse;
+                primary: true;
+                clicked => {
+                    HomeUi.browse-files();
+                }
+            }
+        }
+        HorizontalLayout {
+            padding-top: 26px;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 10px;
+                if root.wide: HorizontalLayout {
+                    spacing: 10px;
+                    DropCard {
+                        width: (root.cards-width - 30px) / 4;
+                        category: 0;
+                        name: HomeUi.drop-card-names[0];
+                        formats: HomeUi.drop-card-formats[0];
+                    }
+                    DropCard {
+                        width: (root.cards-width - 30px) / 4;
+                        category: 1;
+                        name: HomeUi.drop-card-names[1];
+                        formats: HomeUi.drop-card-formats[1];
+                    }
+                    DropCard {
+                        width: (root.cards-width - 30px) / 4;
+                        category: 2;
+                        name: HomeUi.drop-card-names[2];
+                        formats: HomeUi.drop-card-formats[2];
+                    }
+                    DropCard {
+                        width: (root.cards-width - 30px) / 4;
+                        category: 4;
+                        name: HomeUi.drop-card-names[3];
+                        formats: HomeUi.drop-card-formats[3];
+                    }
+                }
+                if !root.wide: HorizontalLayout {
+                    spacing: 10px;
+                    DropCard {
+                        width: (root.cards-width - 10px) / 2;
+                        category: 0;
+                        name: HomeUi.drop-card-names[0];
+                        formats: HomeUi.drop-card-formats[0];
+                    }
+                    DropCard {
+                        width: (root.cards-width - 10px) / 2;
+                        category: 1;
+                        name: HomeUi.drop-card-names[1];
+                        formats: HomeUi.drop-card-formats[1];
+                    }
+                }
+                if !root.wide: HorizontalLayout {
+                    spacing: 10px;
+                    DropCard {
+                        width: (root.cards-width - 10px) / 2;
+                        category: 2;
+                        name: HomeUi.drop-card-names[2];
+                        formats: HomeUi.drop-card-formats[2];
+                    }
+                    DropCard {
+                        width: (root.cards-width - 10px) / 2;
+                        category: 4;
+                        name: HomeUi.drop-card-names[3];
+                        formats: HomeUi.drop-card-formats[3];
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Settings page ───────────────────────────────────────────────────────────
+
+// Section title, with room above it to set the sections apart.
+component SectionHeader inherits VerticalLayout {
+    in property <string> text;
+    padding-top: 16px;
+    Text {
+        text: root.text;
+        font-size: Theme.font-body;
+        font-weight: Theme.weight-semibold;
+        color: Theme.text-primary;
+        wrap: word-wrap;
+    }
+}
+
+component SectionHint inherits Text {
+    font-size: Theme.font-caption;
+    color: Theme.text-muted;
+    wrap: word-wrap;
+}
+
+component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border-subtle;
+}
+
+// A setting: title (+ description) on the left, its control on the right.
+component SettingRow inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> description;
+    spacing: 12px;
+    min-height: 36px;
+    VerticalLayout {
+        horizontal-stretch: 1;
+        alignment: center;
+        spacing: 2px;
+        Text {
+            text: root.title;
+            font-size: Theme.font-body;
+            color: Theme.text-primary;
+            wrap: word-wrap;
+        }
+        if root.description != "": Text {
+            text: root.description;
+            font-size: Theme.font-caption;
+            color: Theme.text-muted;
+            wrap: word-wrap;
+        }
+    }
+    @children
+}
+
+// Quality slider with its value.
+component QualityRow inherits SettingRow {
+    in property <length> control-width;
+    in-out property <float> value;
+    HorizontalLayout {
+        width: root.control-width;
+        spacing: 8px;
+        Slider {
+            horizontal-stretch: 1;
+            minimum: 1;
+            maximum: 100;
+            step: 1;
+            value <=> root.value;
+            accessible-label: root.title;
+            changed => {
+                HomeUi.changed-soon();
+            }
+        }
+        Text {
+            text: round(root.value);
+            width: 28px;
+            font-size: Theme.font-body;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            color: Theme.text-primary;
+        }
+    }
+}
+
+component SettingsPage inherits ScrollView {
+    // The page title and description (the main window); off inside the
+    // conversion window, whose header already says "Settings".
+    in property <bool> show-title: true;
+    // Width of the controls on the right of each row.
+    property <length> control-width: max(150px, min(280px, root.visible-width * 0.42));
+    // About buttons: Open log folder, GitHub, Report a problem.
+    property <[{text: string, icon: image}]> about-links: [
+        { text: HomeUi.open-logs-label, icon: Icons.folder },
+        { text: HomeUi.github-label, icon: Icons.external-link },
+        { text: HomeUi.issues-label, icon: Icons.external-link },
+    ];
+    function open-about-link(i: int) {
+        if (i == 0) {
+            HomeUi.open-logs();
+        } else if (i == 1) {
+            HomeUi.open-github();
+        } else {
+            HomeUi.open-issues();
+        }
+    }
+
+    VerticalLayout {
+        padding: 20px;
+        padding-top: root.show-title ? 20px : 0px;
+        padding-right: 24px;
+        spacing: 8px;
+        alignment: start;
+
+        if root.show-title: VerticalLayout {
+            spacing: 2px;
+            Text {
+                text: HomeUi.nav-settings;
+                font-size: Theme.font-subtitle;
+                font-weight: Theme.weight-semibold;
+                color: Theme.text-primary;
+            }
+            SectionHint {
+                text: HomeUi.settings-description;
+            }
+        }
+
+        if HomeUi.save-error != "": Rectangle {
+            background: Theme.error-fill;
+            border-width: 1px;
+            border-color: Theme.error-border;
+            border-radius: Theme.radius-control + 2px;
+            HorizontalLayout {
+                padding: 12px;
+                spacing: 10px;
+                VerticalLayout {
+                    alignment: start;
+                    Icon {
+                        source: Icons.error;
+                        width: 18px;
+                        height: 18px;
+                        colorize: Theme.error-text;
+                    }
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: HomeUi.save-error;
+                    color: Theme.text-primary;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
+        // ── 1. Right-click menu (file types) ──
+        SectionHeader {
+            text: HomeUi.sec-file-types;
+        }
+        SectionHint {
+            text: HomeUi.file-types-hint;
+        }
+        Card {
+            inner-padding: 12px;
+            inner-spacing: 4px;
+            ToggleRow {
+                text: HomeUi.type-images;
+                description: HomeUi.type-descriptions[0];
+                checked <=> HomeUi.images;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+            Divider { }
+            ToggleRow {
+                text: HomeUi.type-pdf;
+                description: HomeUi.type-descriptions[1];
+                checked <=> HomeUi.pdf;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+            Divider { }
+            ToggleRow {
+                text: HomeUi.type-video;
+                description: HomeUi.type-descriptions[2];
+                checked <=> HomeUi.video;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+            Divider { }
+            ToggleRow {
+                text: HomeUi.type-audio;
+                description: HomeUi.type-descriptions[3];
+                checked <=> HomeUi.audio;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+            Divider { }
+            ToggleRow {
+                text: HomeUi.type-office;
+                description: HomeUi.type-descriptions[4];
+                checked <=> HomeUi.office;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+        }
+
+        // ── 2. Defaults per file type ──
+        SectionHeader {
+            text: HomeUi.sec-defaults;
+        }
+        ExpanderCard {
+            title: HomeUi.defaults-title;
+            subtitle: HomeUi.defaults-summary;
+            expanded <=> HomeUi.defaults-expanded;
+            SectionHint {
+                text: HomeUi.defaults-hint;
+            }
+            QualityRow {
+                title: HomeUi.jpeg-quality-label;
+                control-width: root.control-width;
+                value <=> HomeUi.jpeg-quality;
+            }
+            QualityRow {
+                title: HomeUi.webp-quality-label;
+                control-width: root.control-width;
+                value <=> HomeUi.webp-quality;
+            }
+            QualityRow {
+                title: HomeUi.avif-quality-label;
+                control-width: root.control-width;
+                value <=> HomeUi.avif-quality;
+            }
+            SettingRow {
+                title: HomeUi.png-level-label;
+                SpinBox {
+                    width: root.control-width;
+                    minimum: 0;
+                    maximum: 6;
+                    value <=> HomeUi.png-level;
+                    accessible-label: HomeUi.png-level-label;
+                    edited => {
+                        HomeUi.changed-soon();
+                    }
+                }
+            }
+            SettingRow {
+                title: HomeUi.pdf-preset-label;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.pdf-preset-names;
+                    current-index <=> HomeUi.pdf-preset;
+                    accessible-label: HomeUi.pdf-preset-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            SettingRow {
+                title: HomeUi.pdf-dpi-label;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.pdf-dpi-names;
+                    current-index <=> HomeUi.pdf-dpi;
+                    accessible-label: HomeUi.pdf-dpi-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            SettingRow {
+                title: HomeUi.video-preset-label;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.video-preset-names;
+                    current-index <=> HomeUi.video-preset;
+                    accessible-label: HomeUi.video-preset-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            SettingRow {
+                title: HomeUi.video-encoder-label;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.video-encoder-names;
+                    current-index <=> HomeUi.video-encoder;
+                    accessible-label: HomeUi.video-encoder-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            SettingRow {
+                title: HomeUi.mp3-bitrate-label;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.mp3-bitrate-names;
+                    current-index <=> HomeUi.mp3-bitrate;
+                    accessible-label: HomeUi.mp3-bitrate-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+        }
+
+        // ── 3. Output ──
+        SectionHeader {
+            text: HomeUi.sec-output;
+        }
+        Card {
+            SettingRow {
+                title: HomeUi.output-location-label;
+                description: HomeUi.output-location-hint;
+                ComboBox {
+                    width: root.control-width;
+                    model: [HomeUi.output-next-to, HomeUi.output-folder];
+                    current-index <=> HomeUi.output-mode;
+                    accessible-label: HomeUi.output-location-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                VerticalLayout {
+                    alignment: center;
+                    Icon {
+                        source: Icons.folder;
+                        colorize: HomeUi.output-mode == 1 ? Theme.text-primary : Theme.text-muted;
+                    }
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: HomeUi.folder-text;
+                    font-size: Theme.font-caption;
+                    color: HomeUi.output-mode == 1 ? Theme.text-primary : Theme.text-muted;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Button {
+                    text: HomeUi.choose-folder-label;
+                    clicked => {
+                        HomeUi.choose-folder();
+                    }
+                }
+            }
+            Divider { }
+            CheckBox {
+                text: HomeUi.open-folder-label;
+                checked <=> HomeUi.open-folder-when-done;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+            CheckBox {
+                text: HomeUi.keep-dates-label;
+                checked <=> HomeUi.keep-dates;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+        }
+
+        // ── 4–5. Office engine & performance ──
+        SectionHeader {
+            text: HomeUi.sec-engines;
+        }
+        Card {
+            SettingRow {
+                title: HomeUi.office-engine-label;
+                description: HomeUi.office-engine-hint;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.engine-names;
+                    current-index <=> HomeUi.engine;
+                    accessible-label: HomeUi.office-engine-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            VerticalLayout {
+                spacing: 4px;
+                for line[i] in HomeUi.engine-status: HorizontalLayout {
+                    alignment: start;
+                    property <bool> found: HomeUi.engine-found[i];
+                    Pill {
+                        text: line;
+                        has-icon: true;
+                        icon: found ? Icons.check : Icons.close;
+                        fill: found ? Theme.success-fill : Theme.error-fill;
+                        stroke: found ? Theme.success-border : Theme.error-border;
+                        text-color: found ? Theme.success-text : Theme.error-text;
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Button {
+                    text: HomeUi.check-again;
+                    icon: Icons.refresh;
+                    colorize-icon: true;
+                    clicked => {
+                        HomeUi.check-engines();
+                    }
+                }
+                if HomeUi.libreoffice-missing: Button {
+                    text: HomeUi.download-libreoffice-label;
+                    icon: Icons.external-link;
+                    colorize-icon: true;
+                    clicked => {
+                        HomeUi.download-libreoffice();
+                    }
+                }
+            }
+            Divider { }
+            SettingRow {
+                title: HomeUi.image-jobs-label;
+                description: HomeUi.image-jobs-hint;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.image-jobs-names;
+                    current-index <=> HomeUi.image-jobs;
+                    accessible-label: HomeUi.image-jobs-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            Divider { }
+            ToggleRow {
+                text: HomeUi.use-gpu-label;
+                description: HomeUi.gpu-status;
+                checked <=> HomeUi.use-gpu;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+        }
+
+        // ── 6–7. Appearance & notifications ──
+        SectionHeader {
+            text: HomeUi.sec-appearance;
+        }
+        Card {
+            SettingRow {
+                title: HomeUi.theme-label;
+                description: HomeUi.theme-hint;
+                ComboBox {
+                    width: root.control-width;
+                    model: HomeUi.theme-names;
+                    current-index <=> HomeUi.theme;
+                    accessible-label: HomeUi.theme-label;
+                    selected => {
+                        HomeUi.changed();
+                    }
+                }
+            }
+            Divider { }
+            ToggleRow {
+                text: HomeUi.toast-label;
+                description: HomeUi.toast-hint;
+                checked <=> HomeUi.toast;
+                toggled => {
+                    HomeUi.changed();
+                }
+            }
+        }
+
+        // ── 8. About ──
+        SectionHeader {
+            text: HomeUi.sec-about;
+        }
+        Card {
+            VerticalLayout {
+                spacing: 2px;
+                Text {
+                    text: HomeUi.version-text;
+                    font-size: Theme.font-body;
+                    font-weight: Theme.weight-semibold;
+                    color: Theme.text-primary;
+                    wrap: word-wrap;
+                }
+                SectionHint {
+                    text: HomeUi.about-description;
+                }
+            }
+            // One row; stacked in a narrow window (no sideways scrolling).
+            if root.visible-width >= 560px: HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                for link[i] in root.about-links: Button {
+                    text: link.text;
+                    icon: link.icon;
+                    colorize-icon: true;
+                    clicked => {
+                        root.open-about-link(i);
+                    }
+                }
+            }
+            if root.visible-width < 560px: VerticalLayout {
+                spacing: 8px;
+                alignment: start;
+                for link[i] in root.about-links: Button {
+                    text: link.text;
+                    icon: link.icon;
+                    colorize-icon: true;
+                    clicked => {
+                        root.open-about-link(i);
+                    }
+                }
+            }
+        }
+        ExpanderCard {
+            title: HomeUi.third-party-label;
+            subtitle: HomeUi.third-party-summary;
+            expanded <=> HomeUi.licenses-expanded;
+            SectionHint {
+                text: HomeUi.third-party-hint;
+            }
+            VerticalLayout {
+                spacing: 3px;
+                for line in HomeUi.third-party: Text {
+                    text: line;
+                    font-size: Theme.font-caption;
+                    font-family: Theme.font-mono;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}
+
+// ── Pages ───────────────────────────────────────────────────────────────────
+
+export component HomePage inherits Rectangle {
+    background: Theme.surface-window;
+
+    HorizontalLayout {
+        NavRail { }
+
+        if HomeUi.nav == 0: VerticalLayout {
+            horizontal-stretch: 1;
+            padding: 24px;
+            DropZone {
+                wide: root.width >= 820px;
+                // Window − rail − page padding − zone padding.
+                cards-width: root.width - 184px - 48px - 48px;
+            }
+        }
+        if HomeUi.nav == 1: SettingsPage {
+            horizontal-stretch: 1;
+        }
+    }
+}
+
+// Settings opened from the conversion window's gear button: no navigation
+// rail, a Back button that returns to the selection.
+export component SettingsView inherits Rectangle {
+    background: Theme.surface-window;
+    VerticalLayout {
+        HorizontalLayout {
+            padding: 12px;
+            padding-left: 16px;
+            padding-bottom: 0px;
+            spacing: 8px;
+            IconButton {
+                icon: Icons.arrow-left;
+                label: HomeUi.back-label;
+                clicked => {
+                    HomeUi.back();
+                }
+            }
+            Text {
+                text: HomeUi.nav-settings;
+                font-size: Theme.font-subtitle;
+                font-weight: Theme.weight-semibold;
+                color: Theme.text-primary;
+                vertical-alignment: center;
+            }
+        }
+        SettingsPage {
+            vertical-stretch: 1;
+            show-title: false;
+        }
+    }
+}
