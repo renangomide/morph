@@ -784,7 +784,13 @@ mod tests {
             // The request gets every selected path, the folder too (the window skips it).
             let files = selection::all_paths(&items);
             assert_eq!(files.len(), names.len(), "{test}");
-            assert!(files.iter().all(|f| f.starts_with(&dir)), "{test}");
+            // Compare the unique folder name only: TEMP may be an 8.3 short path.
+            assert!(
+                files
+                    .iter()
+                    .all(|f| f.parent().and_then(|p| p.file_name()) == dir.file_name()),
+                "{test}"
+            );
             let _ = std::fs::remove_dir_all(&dir);
         }
     }
