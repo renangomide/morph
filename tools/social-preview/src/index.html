@@ -1,0 +1,157 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- GitHub social preview of Morph (1280x640). Rendered by ../render.mjs to docs/images/social-preview.png.
+     The context menu, Morph submenu and results card are copied from tools/readme-gif/src/index.html (Windows 11 dark
+     menu replica; Morph window rebuilt from crates/morph-app/ui/*.slint, dark theme, Windows default accent).
+     Submenu entries: image_menu() in crates/morph-formats/src/menu.rs. Numbers: tools/readme-gif/src/results.json. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Morph social preview</title>
+<style>
+:root {
+  /* Morph tokens: crates/morph-app/ui/theme.slint (dark) */
+  --surface-window: #202020; --surface-card: #2b2b2b; --surface-card-subtle: #262626;
+  --border-card: #3a3a3a; --border-subtle: #353535; --border-input: #454545;
+  --text-primary: #f3f3f3; --text-secondary: #c6c6c6; --text-muted: #a6a6a6;
+  --success-fill: #1e3a24; --success-border: #2d5936; --success-text: #6ccb5f;
+  /* Windows 11 dark context menu */
+  --menu-bg: #2c2c2c; --menu-border: rgba(255,255,255,0.09); --menu-hover: rgba(255,255,255,0.075);
+  /* Morph icon gradient: packaging/icon/morph.svg */
+  --violet: #8e6bff; --indigo: #4f3be0;
+  --display: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --xaml: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+  /* Morph (Slint 1.18, no font set) renders in Arial on Windows */
+  --morph: Arial, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1280px; height: 640px; overflow: hidden; background: #0d0d10; }
+#card { position: absolute; inset: 0; overflow: hidden; -webkit-font-smoothing: antialiased; color: #fff;
+  background:
+    radial-gradient(720px 520px at 960px 300px, rgba(122, 96, 255, 0.30), rgba(122, 96, 255, 0) 70%),
+    radial-gradient(600px 420px at 120px 80px, rgba(79, 59, 224, 0.16), rgba(79, 59, 224, 0) 70%),
+    linear-gradient(180deg, #121217 0%, #0c0c0f 100%); }
+/* faint dot grid, fades out towards the edges */
+#grid { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1.4px); background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(700px 460px at 940px 320px, #000 0%, transparent 75%); }
+
+/* ───── left column ───── */
+#brand { position: absolute; left: 72px; top: 112px; display: flex; align-items: center; gap: 22px; }
+#brand img { width: 88px; height: 88px; display: block; filter: drop-shadow(0 8px 24px rgba(110, 80, 255, 0.45)); }
+#brand .wm { font-family: var(--display); font-weight: 600; font-size: 84px; line-height: 1; letter-spacing: -1.5px; }
+#tagline { position: absolute; left: 72px; top: 238px; white-space: nowrap; font-family: var(--display); font-weight: 600; font-size: 38px; line-height: 1.2; letter-spacing: -0.4px; color: #fff; }
+#tagline em { font-style: normal; background: linear-gradient(90deg, #b9a6ff, #8e6bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+#formats { position: absolute; left: 72px; top: 372px; display: flex; flex-wrap: wrap; gap: 10px; width: 520px; }
+#formats span { height: 36px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); font-family: var(--xaml); font-size: 18px; font-weight: 600; color: #e6e6ea; }
+#facts { position: absolute; left: 72px; top: 488px; font-family: var(--xaml); font-size: 24px; color: #c9c9d1; display: flex; align-items: center; gap: 14px; }
+#facts i { width: 5px; height: 5px; border-radius: 50%; background: #8e6bff; display: inline-block; }
+
+/* ───── Windows 11 context menu (dark): copied from tools/readme-gif ───── */
+#shotwrap { position: absolute; inset: 0; -webkit-mask-image: linear-gradient(180deg, transparent 12px, rgba(0,0,0,0.35) 60px, #000 160px); }
+#shot { position: absolute; left: 600px; top: -66px; width: 1px; height: 1px; transform: scale(1.2); transform-origin: 0 0; }
+.menu { position: absolute; background: var(--menu-bg); border: 1px solid var(--menu-border); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.36), 0 0 2px rgba(0,0,0,0.3), 0 24px 64px rgba(0,0,0,0.45); padding: 4px; font-family: var(--xaml); font-size: 14px; color: #fff; }
+.menu .row { height: 32px; display: flex; align-items: center; border-radius: 4px; position: relative; padding-left: 12px; padding-right: 12px; white-space: nowrap; }
+.menu .row.icon { padding-left: 44px; }
+.menu .row .mi { position: absolute; left: 12px; top: 8px; width: 16px; height: 16px; font-family: var(--icons); font-size: 16px; line-height: 16px; text-align: center; }
+.menu .row .sc { margin-left: auto; padding-left: 28px; font-size: 12px; color: rgba(255,255,255,0.6); }
+.menu .row .sub { margin-left: auto; font-family: var(--icons); font-size: 10px; color: rgba(255,255,255,0.8); padding-left: 24px; }
+.menu .row.h { background: var(--menu-hover); }
+.menu .sep { height: 1px; background: rgba(255,255,255,0.08); margin: 4px -4px; }
+.menu .icons { display: flex; gap: 4px; padding: 2px 4px 2px 4px; height: 44px; align-items: center; }
+.menu .icons span { width: 40px; height: 36px; display: flex; align-items: center; justify-content: center; font-family: var(--icons); font-size: 16px; border-radius: 4px; }
+#ctx { left: 0; top: 0; width: 296px; }
+#sub { width: 232px; }
+#cursor { position: absolute; z-index: 5; }
+#cursor svg { display: block; overflow: visible; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.45)); }
+
+/* ───── Morph results card (progress_view.slint, finished): copied from tools/readme-gif ───── */
+#win { position: absolute; left: 560px; top: 432px; width: 374px; transform: scale(1); transform-origin: 0 0; border-radius: 8px; border: 1px solid #3b3b3b; background: var(--surface-window); box-shadow: 0 32px 64px rgba(0,0,0,0.55), 0 2px 21px rgba(0,0,0,0.4); overflow: hidden; font-family: var(--morph); color: var(--text-primary); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--surface-card); border: 1px solid var(--border-card); border-radius: 10px; }
+.pill { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 10px; border: 1px solid var(--border-card); background: var(--surface-card-subtle); font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.pill.mono { font-family: Consolas, monospace; color: var(--text-muted); }
+.pill.strong { font-weight: 600; color: var(--text-primary); }
+.pill.ok { background: var(--success-fill); border-color: var(--success-border); color: var(--success-text); font-weight: 600; }
+#phead { padding: 13px; display: flex; align-items: center; gap: 10px; }
+.sbadge { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--success-border); background: var(--success-fill); display: flex; align-items: center; justify-content: center; flex: none; }
+#phead .mid { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+#phead .ttl { font-size: 16px; font-weight: 600; }
+.sub12 { font-size: 12px; color: var(--text-muted); }
+.prow { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.prow + .prow::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--border-subtle); }
+.dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--success-border); background: var(--success-fill); display: flex; align-items: center; justify-content: center; flex: none; }
+.prow .mid { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.prow .l1 { display: flex; align-items: center; gap: 8px; }
+.prow .name { font-size: 14px; font-weight: 600; }
+.prow .acts { display: flex; gap: 6px; }
+.sbtn { height: 28px; min-width: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-input); background: #323232; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.sbtn.ico { padding: 0 6px; }
+.prow .l2 { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="card">
+ <div id="grid"></div>
+
+ <div id="brand"><img src="../../../packaging/icon/morph.svg" alt=""><span class="wm">Morph</span></div>
+ <div id="tagline">Convert files right from the<br><em>Windows 11 right-click menu.</em></div>
+ <div id="formats"><span>JPG</span><span>PNG</span><span>WebP</span><span>AVIF</span><span>HEIC</span><span>PDF</span><span>MP4</span><span>MP3</span><span>DOCX</span></div>
+ <div id="facts"><span>Free</span><i></i><span>Open source</span><i></i><span>Works offline</span></div>
+
+ <div id="shotwrap"><div id="shot">
+  <!-- context menu for a JPEG selection -->
+  <div id="ctx" class="menu">
+   <div class="icons"><span>&#xE8C6;</span><span>&#xE8C8;</span><span>&#xE72D;</span><span>&#xE74D;</span></div>
+   <div class="sep"></div>
+   <div class="row icon"><span class="mi"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="2" width="14" height="12" rx="2.5" fill="#2f86e0"/><path d="M2.2 12.6l3.8-4.4 2.6 2.8 1.8-1.9 3.4 3.5z" fill="#a8d8ff"/><circle cx="11" cy="5.6" r="1.4" fill="#fff"/></svg></span>Open<span class="sc">Enter</span></div>
+   <div class="row icon"><span class="mi">&#xE7F4;</span>Set as desktop background</div>
+   <div class="row icon"><span class="mi">&#xE7AD;</span>Rotate right</div>
+   <div class="row icon"><span class="mi" style="transform:scaleX(-1)">&#xE7AD;</span>Rotate left</div>
+   <div class="sep"></div>
+   <div class="row icon h" id="r-morph"><span class="mi"><img src="../../../packaging/icon/morph.svg" width="16" height="16" alt=""></span>Morph<span class="sub">&#xE76C;</span></div>
+   <div class="sep"></div>
+   <div class="row icon"><span class="mi">&#xF012;</span>Compress to ZIP file</div>
+   <div class="row icon"><span class="mi">&#xE62F;</span>Copy as path<span class="sc">Ctrl+Shift+C</span></div>
+   <div class="row icon"><span class="mi">&#xE90F;</span>Properties<span class="sc">Alt+Enter</span></div>
+   <div class="sep"></div>
+   <div class="row icon"><span class="mi">&#xE8A7;</span>Show more options<span class="sc">Shift+F10</span></div>
+  </div>
+  <!-- Morph ▸ submenu: image_menu() -->
+  <div id="sub" class="menu">
+   <div class="row">Convert to JPG…</div>
+   <div class="row">Convert to PNG…</div>
+   <div class="row h" id="s-webp">Convert to WebP…</div>
+   <div class="row">Convert to AVIF…</div>
+   <div class="row">Convert to PDF…</div>
+   <div class="sep"></div>
+   <div class="row">Compress…</div>
+   <div class="row">Resize…</div>
+   <div class="row">Remove metadata…</div>
+   <div class="sep"></div>
+   <div class="row">More options…</div>
+  </div>
+  <div id="cursor"><svg width="20" height="26" viewBox="-1 -1 20 26"><path d="M0.5 0.5 L0.5 17.2 L4.6 13.4 L7.4 19.8 L10.2 18.6 L7.5 12.4 L13.2 12.4 Z" fill="#fff" stroke="#000" stroke-width="1" stroke-linejoin="round"/></svg></div>
+ </div></div>
+ 
+ <!-- Morph window, finished conversion (first row of results.json) -->
+ <div id="win">
+  <div class="card" id="phead"><div class="sbadge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6ccb5f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div class="mid"><div class="ttl">6 converted · saved 11.8 MB</div><div class="sub12">Saved next to the original files</div></div><span class="pill strong">6 / 6</span></div>
+  <div class="card">
+   <div class="prow"><div class="dot"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6ccb5f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div class="mid"><div class="l1"><span class="name">IMG_2041.jpg</span><span class="pill mono">→ WebP</span></div><div class="l2"><span>4.2 MB → 2.2 MB</span><span class="pill ok">−48%</span></div></div><div class="acts"><div class="sbtn">Open</div><div class="sbtn ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f3f3f3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div></div></div>
+  </div>
+ </div>
+</div>
+
+<script>
+'use strict';
+// Submenu opens beside the Morph row (Windows: row top - 4 px, 4 px overlap), cursor rests on "Convert to WebP…".
+const $ = s => document.querySelector(s);
+const ctx = $('#ctx'), sub = $('#sub'), morph = $('#r-morph'), webp = $('#s-webp'), cur = $('#cursor');
+sub.style.left = (ctx.offsetWidth - 4) + 'px';
+sub.style.top = (morph.offsetTop - 4) + 'px';
+cur.style.left = (sub.offsetLeft + webp.offsetLeft + 150) + 'px';
+cur.style.top = (sub.offsetTop + webp.offsetTop + 14) + 'px';
+window.__ready = document.fonts.ready;
+</script>
+</body>
+</html>
